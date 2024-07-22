@@ -32,10 +32,12 @@ CREATE TABLE Feature (
 
 CREATE TABLE Jurisdiction (
     id VARCHAR(36) NOT NULL,
-    name VARCHAR(200) NOT NULL,
+    name VARCHAR(16) NOT NULL,
+    title VARCHAR(200) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE INDEX id_UNIQUE (id ASC) VISIBLE,
-    UNIQUE INDEX name_UNIQUE (name ASC) VISIBLE
+    UNIQUE INDEX name_UNIQUE (name ASC) VISIBLE,
+    UNIQUE INDEX title_UNIQUE (title ASC) VISIBLE
 );
 
 CREATE TABLE Cell (
@@ -73,7 +75,7 @@ CREATE TABLE Availability (
      # What is being made available
      item_id VARCHAR(36) NOT NULL,
      # Where it is being made available
-     jurisdiction_id VARCHAR(36),
+     jurisdiction_id VARCHAR(36) NOT NULL,
      stage_id VARCHAR(36) NOT NULL,
      # The status type for this entry
      status_id VARCHAR(36) NOT NULL,
@@ -167,19 +169,19 @@ INSERT INTO Category  VALUES (UUID(), 'Okta Personal');
 INSERT INTO Category  VALUES (UUID(), 'Identity Security Posture Management');
 
 SELECT UUID() INTO @j_nac;
-INSERT INTO Jurisdiction VALUES (@j_nac, 'North American Commercial');
+INSERT INTO Jurisdiction VALUES (@j_nac, 'aws_nac', 'North America Commercial');
 SELECT UUID() INTO @j_frm;
-INSERT INTO Jurisdiction VALUES (@j_frm, 'Okta for Government Moderate & HIPAA');
+INSERT INTO Jurisdiction VALUES (@j_frm, 'aws_frm', 'Okta for Government Moderate & HIPAA');
 SELECT UUID() INTO @j_frh;
-INSERT INTO Jurisdiction VALUES (@j_frh, 'Okta for Government High');
+INSERT INTO Jurisdiction VALUES (@j_frh, 'aws_frh', 'Okta for Government High');
 SELECT UUID() INTO @j_il4;
-INSERT INTO Jurisdiction VALUES (@j_il4, 'Okta for U.S. Military');
+INSERT INTO Jurisdiction VALUES (@j_il4, 'aws_il4', 'Okta for U.S. Military');
 SELECT UUID() INTO @j_emea;
-INSERT INTO Jurisdiction VALUES (@j_emea, 'EMEA');
+INSERT INTO Jurisdiction VALUES (@j_emea, 'aws_emea', 'EMEA');
 SELECT UUID() INTO @j_apj;
-INSERT INTO Jurisdiction VALUES (@j_apj, 'APJ');
+INSERT INTO Jurisdiction VALUES (@j_apj, 'aws_apj', 'APJ');
 SELECT UUID() INTO @j_gcp_nac;
-INSERT INTO Jurisdiction VALUES (@j_gcp_nac, 'GCP North American Commercial');
+INSERT INTO Jurisdiction VALUES (@j_gcp_nac, 'gcp_nac', 'GCP North America Commercial');
 
 SELECT UUID() INTO @ok1;
 INSERT INTO Cell VALUES (@ok1, 'OK1','AWS', 'AMER', 'USA', 'us-east-1', @j_nac);
@@ -195,7 +197,7 @@ SELECT UUID() INTO @ok11;
 INSERT INTO Cell VALUES (@ok11, 'OK11','AWS', 'AMER', 'USA', 'us-east-2', @j_nac);
 SELECT UUID() INTO @ok7;
 INSERT INTO Cell VALUES (@ok7, 'OK7','AWS', 'AMER', 'USA', 'us-west-2', @j_nac);
-SELECT UUID() INTO @ok11;
+SELECT UUID() INTO @ok12;
 INSERT INTO Cell VALUES (@ok12, 'OK12','AWS', 'AMER', 'USA', 'us-west-2', @j_nac);
 SELECT UUID() INTO @ok14;
 INSERT INTO Cell VALUES (@ok14, 'OK14','AWS', 'AMER', 'USA', 'us-west-2', @j_nac);
@@ -238,5 +240,19 @@ INSERT INTO StatusType VALUES (@audit_ready, 'Audit Ready');
 SELECT UUID() INTO @authorized;
 INSERT INTO StatusType VALUES (@authorized, 'Authorized');
 
-# id, item_id, jurisdiction_id, stage_id, status_id, comment
-INSERT INTO Availability (id, item_id, jurisdiction_id, stage_id, status_id,last_updated) VALUES (UUID(), @p_ud, @j_nac, @ga, @available, UTC_TIMESTAMP());
+# North America Commercial:  @j_nac;
+# FedRAMP Moderate/HIPAA: @j_frm;
+# FedRAMP High: @j_frh;
+# IL4: @j_il4;
+# EMEA{ @j_emea;
+# APJ: INTO @j_apj;
+# Google Cloud Platform - North America Commercial: @j_gcp_nac;
+
+SELECT UTC_TIMESTAMP() INTO @now;
+INSERT INTO Availability (id, item_id, jurisdiction_id, stage_id, status_id,last_updated) VALUES (UUID(), @p_ud, @j_nac, @ga, @available, @now);
+INSERT INTO Availability (id, item_id, jurisdiction_id, stage_id, status_id,last_updated) VALUES (UUID(), @p_ud, @j_frm, @ga, @available, @now);
+INSERT INTO Availability (id, item_id, jurisdiction_id, stage_id, status_id,last_updated) VALUES (UUID(), @p_ud, @j_frh, @ga, @available, @now);
+INSERT INTO Availability (id, item_id, jurisdiction_id, stage_id, status_id,last_updated) VALUES (UUID(), @p_ud, @j_il4, @ga, @available, @now);
+INSERT INTO Availability (id, item_id, jurisdiction_id, stage_id, status_id,last_updated) VALUES (UUID(), @p_ud, @j_emea, @ga, @available, @now);
+INSERT INTO Availability (id, item_id, jurisdiction_id, stage_id, status_id,last_updated) VALUES (UUID(), @p_ud, @j_apj, @ga, @available, @now);
+INSERT INTO Availability (id, item_id, jurisdiction_id, stage_id, status_id, comment, last_updated) VALUES (UUID(), @p_ud, @j_gcp_nac, @ga, @not_available, 'EA Planned for Oct', @now);

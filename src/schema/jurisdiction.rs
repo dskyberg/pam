@@ -7,6 +7,7 @@ use super::{root::Context, Cell};
 pub struct Jurisdiction {
     pub id: String,
     pub name: String,
+    pub title: String,
 }
 
 #[graphql_object(Context = Context)]
@@ -16,6 +17,9 @@ impl Jurisdiction {
     }
     fn name(&self) -> &str {
         &self.name
+    }
+    fn title(&self) -> &str {
+        &self.title
     }
 
     fn cells(&self, context: &Context) -> Vec<Cell> {

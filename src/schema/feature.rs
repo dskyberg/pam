@@ -1,7 +1,7 @@
 use juniper::GraphQLInputObject;
 use mysql::{from_row, params, prelude::*, Error as DBError, Row};
 
-use crate::schema::{root::Context, Product};
+use crate::schema::{root::Context, Availability, Product};
 
 /// Product
 #[derive(Default, Debug, FromRow)]
@@ -40,6 +40,19 @@ impl Feature {
                 category_id,
             })
         }
+    }
+
+    fn availability(&self, context: &Context) -> Vec<Availability> {
+        let mut conn = context.db_pool.get().unwrap();
+
+        conn.exec(
+            "SELECT * FROM Availability WHERE Availability.item_id = :id",
+            params! { "id" => &self.id },
+        )
+        .unwrap()
+        .into_iter()
+        .map(Availability::from_row)
+        .collect()
     }
 }
 

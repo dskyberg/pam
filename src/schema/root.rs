@@ -2,8 +2,12 @@ use juniper::{
     graphql_object, graphql_value, EmptySubscription, FieldError, FieldResult, RootNode,
 };
 use mysql::{params, prelude::*, Error as DBError, Row};
+use uuid::Uuid;
 
-use super::{Category, CategoryInput, Cell, Jurisdiction, Product, ProductInput};
+use super::{
+    Availability, AvailabilityInput, Category, CategoryInput, Cell, Feature, Jurisdiction, Product,
+    ProductInput,
+};
 use crate::database::Pool;
 
 pub struct Context {
@@ -71,6 +75,16 @@ impl QueryRoot {
         )?)
     }
 
+    #[graphql(description = "Get a single feature by name")]
+    fn feature(context: &Context, name: String) -> FieldResult<Option<Feature>> {
+        let mut conn = context.db_pool.get()?;
+
+        Ok(conn.exec_first::<Feature, &str, _>(
+            "SELECT * FROM Feature WHERE name=:name",
+            params! {"name" => name},
+        )?)
+    }
+
     #[graphql(description = "List of all cells")]
     fn cells(context: &Context) -> FieldResult<Vec<Cell>> {
         let mut conn = context.db_pool.get()?;
@@ -125,7 +139,7 @@ impl MutationRoot {
 
     fn create_product(context: &Context, product: ProductInput) -> FieldResult<Product> {
         let mut conn = context.db_pool.get().unwrap();
-        let new_id = uuid::Uuid::new_v4().simple().to_string();
+        let new_id = uuid::Uuid::new_v4().to_string();
 
         let insert: Result<Option<Row>, DBError> = conn.exec_first(
             "INSERT INTO Product(id, name, category_id) VALUES(:id, :name, :category_id)",
@@ -153,6 +167,118 @@ impl MutationRoot {
                 ))
             }
         }
+    }
+
+    fn create_product_availability(
+        context: &Context,
+        availability_input: AvailabilityInput,
+    ) -> FieldResult<Option<Availability>> {
+        let mut conn = context.db_pool.get().unwrap();
+        let new_id = Uuid::new_v4().to_string();
+        // Make sure there's not already an availability for this product in this jurisdiction
+        let result: Option<Availability> = conn.exec_first(
+            r#"SELECT * from Availability
+            LEFT JOIN Product ON Product.id = Availability.item_id
+            LEFT JOIN Jurisdiction ON Jurisdiction.id = Availability.jurisdiction_id
+            WHERE Product.name = :pname and Jurisdiction.name = :jurisdiction;"#,
+            params! {
+                "pname" => &availability_input.item_name,
+                "jurisdiction" => &availability_input.jurisdiction
+            },
+        )?;
+
+        if result.is_some() {
+            log::info!("Availability already exists for this product");
+            return Ok(result);
+        }
+
+        let _result: Vec<Availability> = conn
+            .exec(
+                r#"INSERT INTO Availability  VALUES (
+            :id,
+            (SELECT id FROM Product WHERE name = :pname),
+            (SELECT id FROM Jurisdiction WHERE name = :jurisdiction),
+            (SELECT id FROM LifecycleStage WHERE name = :stage),
+            (SELECT id FROM StatusType WHERE name = :status),
+            :comment,
+            UTC_TIMESTAMP()
+        )"#,
+                params! {
+                    "id" => &new_id,
+                    "pname" => availability_input.item_name,
+                    "jurisdiction" => availability_input.jurisdiction,
+                    "stage" => availability_input.stage,
+                    "status" => availability_input.status,
+                    "comment" => availability_input.comment
+                },
+            )
+            .map_err(|e| {
+                log::error!("{}", e.to_string());
+                e
+            })?;
+
+        let availability = conn.exec_first::<Availability, &str, _>(
+            r#"SELECT * FROM Availability WHERE id = :id"#,
+            params! {"id" => new_id},
+        )?;
+        log::info!("Added Availability: {:?}", &availability);
+        Ok(availability)
+    }
+
+    fn create_feature_availability(
+        context: &Context,
+        availability_input: AvailabilityInput,
+    ) -> FieldResult<Option<Availability>> {
+        let mut conn = context.db_pool.get().unwrap();
+        let new_id = Uuid::new_v4().to_string();
+        // Make sure there's not already an availability for this product in this jurisdiction
+        let result: Option<Availability> = conn.exec_first(
+            r#"SELECT * from Availability
+            LEFT JOIN Feature ON Feature.id = Availability.item_id
+            LEFT JOIN Jurisdiction ON Jurisdiction.id = Availability.jurisdiction_id
+            WHERE Feature.name = :name and Jurisdiction.name = :jurisdiction;"#,
+            params! {
+                "name" => &availability_input.item_name,
+                "jurisdiction" => &availability_input.jurisdiction
+            },
+        )?;
+
+        if result.is_some() {
+            log::info!("Availability already exists for this product");
+            return Ok(result);
+        }
+
+        let _result: Vec<Availability> = conn
+            .exec(
+                r#"INSERT INTO Availability  VALUES (
+            :id,
+            (SELECT id FROM Feature WHERE name = :name),
+            (SELECT id FROM Jurisdiction WHERE name = :jurisdiction),
+            (SELECT id FROM LifecycleStage WHERE name = :stage),
+            (SELECT id FROM StatusType WHERE name = :status),
+            :comment,
+            UTC_TIMESTAMP()
+        )"#,
+                params! {
+                    "id" => &new_id,
+                    "name" => availability_input.item_name,
+                    "jurisdiction" => availability_input.jurisdiction,
+                    "stage" => availability_input.stage,
+                    "status" => availability_input.status,
+                    "comment" => availability_input.comment
+                },
+            )
+            .map_err(|e| {
+                log::error!("{}", e.to_string());
+                e
+            })?;
+
+        let availability = conn.exec_first::<Availability, &str, _>(
+            r#"SELECT * FROM Availability WHERE id = :id"#,
+            params! {"id" => new_id},
+        )?;
+        log::info!("Added Availability: {:?}", &availability);
+        Ok(availability)
     }
 }
 
