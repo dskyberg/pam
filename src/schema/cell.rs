@@ -1,5 +1,8 @@
-use juniper::{FieldResult, GraphQLInputObject};
-use mysql::{params, prelude::*};
+use anyhow::{anyhow, Result};
+use juniper::GraphQLInputObject;
+use sqlx::FromRow;
+
+use crate::database::{paginate, Pool};
 
 use super::{root::Context, Jurisdiction};
 
@@ -39,13 +42,53 @@ impl Cell {
         &self.jurisdiction_id
     }
 
-    fn jurisdiction(&self, context: &Context) -> FieldResult<Option<Jurisdiction>> {
-        let mut conn = context.db_pool.get().unwrap();
+    async fn jurisdiction(&self, context: &Context) -> Result<Option<Jurisdiction>> {
+        Ok(sqlx::query_as("SELECT * FROM Jurisdiction WHERE id = $1")
+            .bind(&self.jurisdiction_id)
+            .fetch_optional(&context.db_pool)
+            .await?)
+    }
+}
 
-        Ok(conn.exec_first::<Jurisdiction, &str, _>(
-            "SELECT * FROM Jurisdiction WHERE id = :id",
-            params! { "id" => &self.jurisdiction_id },
-        )?)
+impl Cell {
+    pub async fn fetch_all(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        pool: &Pool,
+    ) -> Result<Vec<Self>> {
+        let sql = paginate("SELECT * FROM cell", page_size, page)?;
+        tracing::info!(sql);
+        Ok(sqlx::query_as(&sql).fetch_all(pool).await?)
+    }
+    pub async fn fetch_one(id: Option<String>, name: Option<String>, pool: &Pool) -> Result<Cell> {
+        let query = match (id, name) {
+            (Some(id), None) => sqlx::query_as("SELECT * FROM cell WHERE cell.id = $1").bind(id),
+            (None, Some(name)) => {
+                sqlx::query_as("SELECT * FROM cell WHERE cell.name = $1").bind(name)
+            }
+            _ => return Err(anyhow!("Either id or name must be provided")),
+        };
+
+        Ok(query.fetch_one(pool).await?)
+    }
+
+    pub async fn create_from_input(input: &CellInput, pool: &Pool) -> Result<Cell> {
+        let jurisdiction = Jurisdiction::fetch_one(None, Some(input.jurisdiction.clone()), pool)
+            .await
+            .map_err(|_| anyhow!("Jurisdiction not found: {}", input.jurisdiction))?;
+
+        let result = sqlx::query_as(
+                "INSERT INTO Cell(id, name, csp,country,region,csp_region,jurisdiction) VALUES(gen_random_uuid(),$1, $2, $3,$4,$5,$6) RETURNING *",
+            )
+            .bind(&input.name)
+            .bind(&input.csp)
+            .bind(&input.country)
+            .bind(&input.region)
+            .bind(&input.csp_region)
+            .bind(&jurisdiction.id)
+            .fetch_one(pool)
+            .await?;
+        Ok(result)
     }
 }
 
@@ -57,5 +100,5 @@ pub struct CellInput {
     pub country: String,
     pub region: String,
     pub csp_region: String,
-    pub jurisdiction_id: String,
+    pub jurisdiction: String,
 }

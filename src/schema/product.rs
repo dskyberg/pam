@@ -1,7 +1,11 @@
+use anyhow::{anyhow, Result};
 use juniper::GraphQLInputObject;
-use mysql::{from_row, params, prelude::*, Error as DBError, Row};
+use sqlx::FromRow;
 
-use crate::schema::{root::Context, Category, Feature};
+use crate::{
+    database::{paginate, Pool},
+    schema::{root::Context, Category, Feature},
+};
 
 use super::Availability;
 
@@ -25,45 +29,79 @@ impl Product {
         &self.category_id
     }
 
-    fn features(&self, context: &Context) -> Vec<Feature> {
-        let mut conn = context.db_pool.get().unwrap();
+    async fn features(&self, context: &Context) -> Result<Vec<Feature>> {
+        let features = sqlx::query_as("SELECT * FROM feature WHERE product_id = $1")
+            .bind(&self.id)
+            .fetch_all(&context.db_pool)
+            .await?;
 
-        conn.exec(
-            "SELECT * FROM Feature WHERE product_id = :id",
-            params! { "id" => &self.id },
-        )
-        .unwrap()
-        .into_iter()
-        .map(Feature::from_row)
-        .collect()
+        Ok(features)
     }
 
     /// walk backward from Product to Category
-    fn category(&self, context: &Context) -> Option<Category> {
-        let mut conn = context.db_pool.get().unwrap();
-        let result: Result<Option<Row>, DBError> = conn.exec_first(
-            "SELECT * FROM Category WHERE id=:id",
-            params! {"id" => &self.category_id},
-        );
-        if let Err(_err) = result {
-            None
-        } else {
-            let (id, name) = from_row(result.unwrap().unwrap());
-            Some(Category { id, name })
-        }
+    async fn category(&self, context: &Context) -> Result<Option<Category>> {
+        let result = sqlx::query_as("SELECT * FROM Category WHERE id=$1")
+            .bind(&self.category_id)
+            .fetch_optional(&context.db_pool)
+            .await?;
+        Ok(result)
     }
 
-    fn availability(&self, context: &Context) -> Vec<Availability> {
-        let mut conn = context.db_pool.get().unwrap();
+    async fn availability(&self, context: &Context) -> Result<Vec<Availability>> {
+        let availabilities =
+            sqlx::query_as("SELECT * FROM Availability WHERE Availability.item_id = $1")
+                .bind(&self.id)
+                .fetch_all(&context.db_pool)
+                .await?;
 
-        conn.exec(
-            "SELECT * FROM Availability WHERE Availability.item_id = :id",
-            params! { "id" => &self.id },
+        Ok(availabilities)
+    }
+}
+
+impl Product {
+    pub async fn fetch_all(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        pool: &Pool,
+    ) -> Result<Vec<Self>> {
+        Ok(
+            sqlx::query_as(&paginate("SELECT * FROM product", page_size, page)?)
+                .fetch_all(pool)
+                .await?,
         )
-        .unwrap()
-        .into_iter()
-        .map(Availability::from_row)
-        .collect()
+    }
+
+    pub async fn fetch_one(
+        id: Option<String>,
+        name: Option<String>,
+        pool: &Pool,
+    ) -> Result<Product> {
+        let query = match (id, name) {
+            (Some(id), None) => {
+                sqlx::query_as("SELECT * FROM product WHERE product.id = $1").bind(id)
+            }
+            (None, Some(name)) => {
+                sqlx::query_as("SELECT * FROM product WHERE product.name = $1").bind(name)
+            }
+            _ => return Err(anyhow!("Either id or name must be provided")),
+        };
+
+        Ok(query.fetch_one(pool).await?)
+    }
+
+    pub async fn create_from_input(input: &ProductInput, pool: &Pool) -> Result<Product> {
+        let category = Category::fetch_one(None, Some(input.category.clone()), pool)
+            .await
+            .map_err(|_| anyhow!("Category not found: {}", input.category))?;
+
+        let result = sqlx::query_as(
+            "INSERT INTO Product(id, name, category_id) VALUES(gen_random_uuid(),$1, $2, $3) RETURNING *",
+        )
+        .bind(&input.name)
+        .bind(&category.id)
+        .fetch_one(pool)
+        .await?;
+        Ok(result)
     }
 }
 
@@ -71,5 +109,5 @@ impl Product {
 #[graphql(description = "Product Input")]
 pub struct ProductInput {
     pub name: String,
-    pub category_id: String,
+    pub category: String,
 }

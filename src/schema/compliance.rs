@@ -1,49 +1,35 @@
 use anyhow::{anyhow, Result};
-use juniper::{graphql_object, GraphQLInputObject};
+use juniper::graphql_object;
 use sqlx::FromRow;
 
 use crate::database::{paginate, Pool};
 
-use super::{root::Context, Product};
+use super::root::Context;
 
 #[derive(Default, Debug, PartialEq, Eq, FromRow)]
-pub struct Category {
+pub struct Compliance {
     pub id: String,
     pub name: String,
 }
 
-#[derive(GraphQLInputObject)]
-#[graphql(description = "Category Input")]
-pub struct UserInput {
-    pub name: String,
-}
-
 #[graphql_object(Context = Context)]
-impl Category {
+impl Compliance {
     fn id(&self) -> &str {
         &self.id
     }
     fn name(&self) -> &str {
         &self.name
     }
-
-    async fn products(&self, context: &Context) -> Result<Vec<Product>> {
-        let row = sqlx::query_as("SELECT * FROM Product WHERE category_id = $1")
-            .bind(&self.id)
-            .fetch_all(&context.db_pool)
-            .await?;
-        Ok(row)
-    }
 }
 
-impl Category {
+impl Compliance {
     pub async fn fetch_all(
         page_size: Option<i32>,
         page: Option<i32>,
         pool: &Pool,
-    ) -> Result<Vec<Category>> {
+    ) -> Result<Vec<Compliance>> {
         Ok(
-            sqlx::query_as(&paginate("SELECT * FROM category", page_size, page)?)
+            sqlx::query_as(&paginate("SELECT * FROM compliance", page_size, page)?)
                 .fetch_all(pool)
                 .await?,
         )
@@ -53,13 +39,13 @@ impl Category {
         id: Option<String>,
         name: Option<String>,
         pool: &Pool,
-    ) -> Result<Category> {
+    ) -> Result<Compliance> {
         let query = match (id, name) {
             (Some(id), None) => {
-                sqlx::query_as("SELECT * FROM category WHERE category.id = $1").bind(id)
+                sqlx::query_as("SELECT * FROM Compliance WHERE Compliance.id = $1").bind(id)
             }
             (None, Some(name)) => {
-                sqlx::query_as("SELECT * FROM category WHERE category.name = $1").bind(name)
+                sqlx::query_as("SELECT * FROM Compliance WHERE Compliance.name = $1").bind(name)
             }
             _ => return Err(anyhow!("Either id or name must be provided")),
         };
@@ -67,9 +53,9 @@ impl Category {
         Ok(query.fetch_one(pool).await?)
     }
 
-    pub async fn create(name: &str, pool: &Pool) -> Result<Category> {
+    pub async fn create(name: &str, pool: &Pool) -> Result<Compliance> {
         Ok(
-            sqlx::query_as("INSERT INTO category VALUES (gen_random_uuid(), $1) RETURNING *")
+            sqlx::query_as("INSERT INTO Compliance VALUES (gen_random_uuid(), $1) RETURNING *")
                 .bind(name)
                 .fetch_one(pool)
                 .await?,

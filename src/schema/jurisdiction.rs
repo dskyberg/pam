@@ -1,5 +1,8 @@
+use anyhow::{anyhow, Result};
 use juniper::{graphql_object, GraphQLInputObject};
-use mysql::{params, prelude::*};
+use sqlx::FromRow;
+
+use crate::database::{paginate, Pool};
 
 use super::{root::Context, Cell};
 
@@ -22,17 +25,71 @@ impl Jurisdiction {
         &self.title
     }
 
-    fn cells(&self, context: &Context) -> Vec<Cell> {
-        let mut conn = context.db_pool.get().unwrap();
+    async fn cells(&self, context: &Context) -> Result<Vec<Cell>> {
+        let result = sqlx::query_as("SELECT * FROM Cell WHERE jurisdiction_id = $1")
+            .bind(&self.id)
+            .fetch_all(&context.db_pool)
+            .await?;
+        Ok(result)
+    }
+}
 
-        conn.exec(
-            "SELECT * FROM Cell WHERE jurisdiction_id = :id",
-            params! { "id" => &self.id },
+impl Jurisdiction {
+    pub async fn fetch_all(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        pool: &Pool,
+    ) -> Result<Vec<Jurisdiction>> {
+        Ok(
+            sqlx::query_as(&paginate("SELECT * FROM jurisdiction", page_size, page)?)
+                .fetch_all(pool)
+                .await?,
         )
-        .unwrap()
-        .into_iter()
-        .map(Cell::from_row)
-        .collect()
+    }
+
+    pub async fn fetch_one(
+        id: Option<String>,
+        name: Option<String>,
+        pool: &Pool,
+    ) -> Result<Jurisdiction> {
+        let query = match (id, name) {
+            (Some(id), None) => {
+                sqlx::query_as("SELECT * FROM jurisdiction WHERE jurisdiction.id = $1").bind(id)
+            }
+            (None, Some(name)) => {
+                sqlx::query_as("SELECT * FROM jurisdiction WHERE jurisdiction.name = $1").bind(name)
+            }
+            _ => return Err(anyhow!("Either id or name must be provided")),
+        };
+
+        Ok(query.fetch_one(pool).await?)
+    }
+
+    pub async fn create_from_input(input: &JurisdictionInput, pool: &Pool) -> Result<Jurisdiction> {
+        Ok(
+            sqlx::query_as("INSERT INTO feature VALUES (gen_random_uuid(), $1, $2) RETURNING *")
+                .bind(&input.name)
+                .bind(&input.title)
+                .fetch_one(pool)
+                .await?,
+        )
+    }
+
+    pub async fn delete(
+        id: Option<String>,
+        name: Option<String>,
+        pool: &Pool,
+    ) -> Result<Jurisdiction> {
+        let query = match (id, name) {
+            (Some(id), None) => {
+                sqlx::query_as("DELETE FROM jurisdiction WHERE jurisdiction.id = $1").bind(id)
+            }
+            (None, Some(name)) => {
+                sqlx::query_as("DELETE FROM jurisdiction WHERE jurisdiction.name = $1").bind(name)
+            }
+            _ => return Err(anyhow!("Either id or name must be provided")),
+        };
+        Ok(query.fetch_one(pool).await?)
     }
 }
 
@@ -40,4 +97,5 @@ impl Jurisdiction {
 #[graphql(description = "Jurisdiction Input")]
 pub struct JurisdictionInput {
     pub name: String,
+    pub title: String,
 }

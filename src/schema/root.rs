@@ -1,12 +1,9 @@
-use juniper::{
-    graphql_object, graphql_value, EmptySubscription, FieldError, FieldResult, RootNode,
-};
-use mysql::{params, prelude::*, Error as DBError, Row};
-use uuid::Uuid;
+use anyhow::Result;
+use juniper::{graphql_object, EmptySubscription, RootNode};
 
 use super::{
-    Availability, AvailabilityInput, Category, CategoryInput, Cell, Feature, Jurisdiction, Product,
-    ProductInput,
+    Availability, AvailabilityInput, Category, Cell, Compliance, Feature, FeatureInput,
+    Jurisdiction, JurisdictionInput, Lifecycle, Matrix, Product, ProductInput,
 };
 use crate::database::Pool;
 
@@ -21,84 +18,148 @@ pub struct QueryRoot;
 #[graphql_object(Context = Context)]
 impl QueryRoot {
     #[graphql(description = "List of all categories")]
-    fn categories(context: &Context) -> FieldResult<Vec<Category>> {
-        let mut conn = context.db_pool.get()?;
-        Ok(conn.exec("SELECT * FROM Category", ())?)
+    async fn categories(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        context: &Context,
+    ) -> Result<Vec<Category>> {
+        Category::fetch_all(page_size, page, &context.db_pool).await
     }
 
-    #[graphql(description = "Get a single category by name")]
-    fn category(context: &Context, name: String) -> FieldResult<Option<Category>> {
-        let mut conn = context.db_pool.get()?;
-
-        conn.exec_first::<Category, &str, _>(
-            "SELECT * FROM Category WHERE name=:name",
-            params! {"name" => name},
-        )
-        .map_err(|_e| {
-            FieldError::new(
-                "Category Not Found",
-                graphql_value!({ "not_found": "category not found" }),
-            )
-        })
+    #[graphql(description = "Get the matrix")]
+    async fn matrix(
+        _page_size: Option<i32>,
+        _page: Option<i32>,
+        _context: &Context,
+    ) -> Result<Matrix> {
+        Ok(Matrix {})
     }
 
-    #[graphql(description = "List of all jurisdictions")]
-    fn jurisdictions(context: &Context) -> FieldResult<Vec<Jurisdiction>> {
-        let mut conn = context.db_pool.get()?;
-
-        Ok(conn.exec("SELECT * FROM Jurisdiction", ())?)
+    #[graphql(description = "Get a single category by id or name")]
+    async fn category(
+        id: Option<String>,
+        name: Option<String>,
+        context: &Context,
+    ) -> Result<Category> {
+        Category::fetch_one(id, name, &context.db_pool).await
     }
 
-    #[graphql(description = "Get a single jurisdiction by name")]
-    fn jurisdiction(context: &Context, name: String) -> FieldResult<Option<Jurisdiction>> {
-        let mut conn = context.db_pool.get()?;
-
-        Ok(conn.exec_first::<Jurisdiction, &str, _>(
-            "SELECT * FROM Jurisdiction WHERE name=:name",
-            params! {"name" => name},
-        )?)
+    #[graphql(description = "List all products")]
+    async fn products(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        context: &Context,
+    ) -> Result<Vec<Product>> {
+        Product::fetch_all(page_size, page, &context.db_pool).await
     }
 
-    #[graphql(description = "List of all products")]
-    fn products(context: &Context) -> FieldResult<Vec<Product>> {
-        let mut conn = context.db_pool.get()?;
-        Ok(conn.exec("SELECT * FROM Product", ())?)
+    #[graphql(description = "Get a single product by id or name")]
+    async fn product(
+        name: Option<String>,
+        id: Option<String>,
+        context: &Context,
+    ) -> Result<Product> {
+        Product::fetch_one(id, name, &context.db_pool).await
     }
 
-    #[graphql(description = "Get a single product by name")]
-    fn product(context: &Context, name: String) -> FieldResult<Option<Product>> {
-        let mut conn = context.db_pool.get()?;
-
-        Ok(conn.exec_first::<Product, &str, _>(
-            "SELECT * FROM Product WHERE name=:name",
-            params! {"name" => name},
-        )?)
+    #[graphql(description = "Listall features")]
+    async fn features(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        context: &Context,
+    ) -> Result<Vec<Feature>> {
+        Feature::fetch_all(page_size, page, &context.db_pool).await
     }
 
-    #[graphql(description = "Get a single feature by name")]
-    fn feature(context: &Context, name: String) -> FieldResult<Option<Feature>> {
-        let mut conn = context.db_pool.get()?;
-
-        Ok(conn.exec_first::<Feature, &str, _>(
-            "SELECT * FROM Feature WHERE name=:name",
-            params! {"name" => name},
-        )?)
+    #[graphql(description = "Get a single feature by id or name")]
+    async fn feature(
+        id: Option<String>,
+        name: Option<String>,
+        context: &Context,
+    ) -> Result<Feature> {
+        Feature::fetch_one(id, name, &context.db_pool).await
     }
 
-    #[graphql(description = "List of all cells")]
-    fn cells(context: &Context) -> FieldResult<Vec<Cell>> {
-        let mut conn = context.db_pool.get()?;
-        Ok(conn.exec("SELECT * FROM Cell", ())?)
+    #[graphql(description = "List all jurisdictions")]
+    async fn jurisdictions(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        context: &Context,
+    ) -> Result<Vec<Jurisdiction>> {
+        Jurisdiction::fetch_all(page_size, page, &context.db_pool).await
     }
 
-    #[graphql(description = "Get a single cell by name")]
-    fn cell(context: &Context, name: String) -> FieldResult<Option<Cell>> {
-        let mut conn = context.db_pool.get()?;
+    #[graphql(description = "Get a single jurisdiction by id or name")]
+    async fn jurisdiction(
+        id: Option<String>,
+        name: Option<String>,
+        context: &Context,
+    ) -> Result<Jurisdiction> {
+        Jurisdiction::fetch_one(id, name, &context.db_pool).await
+    }
 
-        Ok(conn.exec_first::<Cell, &str, _>(
-            "SELECT * FROM Cell WHERE name=:name",
-            params! {"name" => name},
-        )?)
+    #[graphql(description = "List all compliances")]
+    async fn compliances(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        context: &Context,
+    ) -> Result<Vec<Compliance>> {
+        Compliance::fetch_all(page_size, page, &context.db_pool).await
+    }
+
+    #[graphql(description = "Get a single compliance by id or name")]
+    async fn compliance(
+        id: Option<String>,
+        name: Option<String>,
+        context: &Context,
+    ) -> Result<Compliance> {
+        Compliance::fetch_one(id, name, &context.db_pool).await
+    }
+
+    #[graphql(description = "List all lifecycles")]
+    async fn lifecycles(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        context: &Context,
+    ) -> Result<Vec<Lifecycle>> {
+        Lifecycle::fetch_all(page_size, page, &context.db_pool).await
+    }
+
+    #[graphql(description = "Get a single lifecycle by id or name")]
+    async fn lifecycle(
+        id: Option<String>,
+        name: Option<String>,
+        context: &Context,
+    ) -> Result<Lifecycle> {
+        Lifecycle::fetch_one(id, name, &context.db_pool).await
+    }
+
+    #[graphql(description = "List all cells")]
+    async fn cells(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        context: &Context,
+    ) -> Result<Vec<Cell>> {
+        Cell::fetch_all(page_size, page, &context.db_pool).await
+    }
+
+    #[graphql(description = "Get a single cell by id or name")]
+    async fn cell(id: Option<String>, name: Option<String>, context: &Context) -> Result<Cell> {
+        Cell::fetch_one(id, name, &context.db_pool).await
+    }
+
+    #[graphql(description = "List all availabilities")]
+    async fn availabilities(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        context: &Context,
+    ) -> Result<Vec<Availability>> {
+        Availability::fetch_all(page_size, page, &context.db_pool).await
+    }
+
+    #[graphql(description = "Get a single availability by id")]
+    async fn availability(id: String, context: &Context) -> Result<Availability> {
+        Availability::fetch_by_id(&id, &context.db_pool).await
     }
 }
 
@@ -106,179 +167,52 @@ pub struct MutationRoot;
 
 #[graphql_object(Context = Context)]
 impl MutationRoot {
-    fn create_category(
-        context: &Context,
-        category: CategoryInput,
-    ) -> FieldResult<Option<Category>> {
-        let mut conn = context.db_pool.get().unwrap();
-        let new_id = uuid::Uuid::new_v4().to_string();
-        conn.exec::<Category, _, _>(
-            "INSERT INTO Category VALUES(:id, :name)",
-            params! {
-                "id" => &new_id,
-                "name" => &category.name,
-            },
-        )?;
-        log::trace!("Inserted id: {}, name: {}", &new_id, &category.name);
-
-        let result = conn
-            .exec_first::<Category, &str, _>(
-                "SELECT * FROM Category WHERE name=:name",
-                params! {"name" => category.name},
-            )
-            .map_err(|_e| {
-                log::error!("Failed to fetch freshly inserted Category");
-                FieldError::new(
-                    "Category Not Found",
-                    graphql_value!({ "not_found": "category not found" }),
-                )
-            })?;
-        log::trace!("Fetched {:?}", &result);
+    async fn create_category(context: &Context, category_name: String) -> Result<Category> {
+        let result = Category::create(&category_name, &context.db_pool).await?;
+        tracing::trace!("Inserted {:?}", &result);
         Ok(result)
     }
 
-    fn create_product(context: &Context, product: ProductInput) -> FieldResult<Product> {
-        let mut conn = context.db_pool.get().unwrap();
-        let new_id = uuid::Uuid::new_v4().to_string();
-
-        let insert: Result<Option<Row>, DBError> = conn.exec_first(
-            "INSERT INTO Product(id, name, category_id) VALUES(:id, :name, :category_id)",
-            params! {
-                "id" => &new_id,
-                "name" => &product.name,
-                "category_id" => &product.category_id
-            },
-        );
-
-        match insert {
-            Ok(_opt_row) => Ok(Product {
-                id: new_id,
-                name: product.name,
-                category_id: product.category_id,
-            }),
-            Err(err) => {
-                let msg = match err {
-                    DBError::MySqlError(err) => err.message,
-                    _ => "internal error".to_owned(),
-                };
-                Err(FieldError::new(
-                    "Failed to create new product",
-                    graphql_value!({ "internal_error": msg }),
-                ))
-            }
-        }
+    async fn create_product(context: &Context, product_input: ProductInput) -> Result<Product> {
+        let result = Product::create_from_input(&product_input, &context.db_pool).await?;
+        tracing::trace!("Inserted {:?}", &result);
+        Ok(result)
     }
 
-    fn create_product_availability(
-        context: &Context,
-        availability_input: AvailabilityInput,
-    ) -> FieldResult<Option<Availability>> {
-        let mut conn = context.db_pool.get().unwrap();
-        let new_id = Uuid::new_v4().to_string();
-        // Make sure there's not already an availability for this product in this jurisdiction
-        let result: Option<Availability> = conn.exec_first(
-            r#"SELECT * from Availability
-            LEFT JOIN Product ON Product.id = Availability.item_id
-            LEFT JOIN Jurisdiction ON Jurisdiction.id = Availability.jurisdiction_id
-            WHERE Product.name = :pname and Jurisdiction.name = :jurisdiction;"#,
-            params! {
-                "pname" => &availability_input.item_name,
-                "jurisdiction" => &availability_input.jurisdiction
-            },
-        )?;
-
-        if result.is_some() {
-            log::info!("Availability already exists for this product");
-            return Ok(result);
-        }
-
-        let _result: Vec<Availability> = conn
-            .exec(
-                r#"INSERT INTO Availability  VALUES (
-            :id,
-            (SELECT id FROM Product WHERE name = :pname),
-            (SELECT id FROM Jurisdiction WHERE name = :jurisdiction),
-            (SELECT id FROM LifecycleStage WHERE name = :stage),
-            (SELECT id FROM StatusType WHERE name = :status),
-            :comment,
-            UTC_TIMESTAMP()
-        )"#,
-                params! {
-                    "id" => &new_id,
-                    "pname" => availability_input.item_name,
-                    "jurisdiction" => availability_input.jurisdiction,
-                    "stage" => availability_input.stage,
-                    "status" => availability_input.status,
-                    "comment" => availability_input.comment
-                },
-            )
-            .map_err(|e| {
-                log::error!("{}", e.to_string());
-                e
-            })?;
-
-        let availability = conn.exec_first::<Availability, &str, _>(
-            r#"SELECT * FROM Availability WHERE id = :id"#,
-            params! {"id" => new_id},
-        )?;
-        log::info!("Added Availability: {:?}", &availability);
-        Ok(availability)
+    async fn create_feature(context: &Context, feature_input: FeatureInput) -> Result<Feature> {
+        let result = Feature::create_from_input(&feature_input, &context.db_pool).await?;
+        tracing::trace!("Inserted {:?}", &result);
+        Ok(result)
     }
 
-    fn create_feature_availability(
+    async fn create_lifecycle(context: &Context, name: String) -> Result<Lifecycle> {
+        let result = Lifecycle::create(&name, &context.db_pool).await?;
+        tracing::trace!("Inserted {:?}", &result);
+        Ok(result)
+    }
+
+    async fn create_compliance(context: &Context, name: String) -> Result<Compliance> {
+        let result = Compliance::create(&name, &context.db_pool).await?;
+        tracing::trace!("Inserted {:?}", &result);
+        Ok(result)
+    }
+
+    async fn create_jurisdiction(
+        context: &Context,
+        jurisdiction: JurisdictionInput,
+    ) -> Result<Jurisdiction> {
+        let result = Jurisdiction::create_from_input(&jurisdiction, &context.db_pool).await?;
+        tracing::trace!("Inserted {:?}", &result);
+        Ok(result)
+    }
+
+    async fn create_availability(
         context: &Context,
         availability_input: AvailabilityInput,
-    ) -> FieldResult<Option<Availability>> {
-        let mut conn = context.db_pool.get().unwrap();
-        let new_id = Uuid::new_v4().to_string();
-        // Make sure there's not already an availability for this product in this jurisdiction
-        let result: Option<Availability> = conn.exec_first(
-            r#"SELECT * from Availability
-            LEFT JOIN Feature ON Feature.id = Availability.item_id
-            LEFT JOIN Jurisdiction ON Jurisdiction.id = Availability.jurisdiction_id
-            WHERE Feature.name = :name and Jurisdiction.name = :jurisdiction;"#,
-            params! {
-                "name" => &availability_input.item_name,
-                "jurisdiction" => &availability_input.jurisdiction
-            },
-        )?;
-
-        if result.is_some() {
-            log::info!("Availability already exists for this product");
-            return Ok(result);
-        }
-
-        let _result: Vec<Availability> = conn
-            .exec(
-                r#"INSERT INTO Availability  VALUES (
-            :id,
-            (SELECT id FROM Feature WHERE name = :name),
-            (SELECT id FROM Jurisdiction WHERE name = :jurisdiction),
-            (SELECT id FROM LifecycleStage WHERE name = :stage),
-            (SELECT id FROM StatusType WHERE name = :status),
-            :comment,
-            UTC_TIMESTAMP()
-        )"#,
-                params! {
-                    "id" => &new_id,
-                    "name" => availability_input.item_name,
-                    "jurisdiction" => availability_input.jurisdiction,
-                    "stage" => availability_input.stage,
-                    "status" => availability_input.status,
-                    "comment" => availability_input.comment
-                },
-            )
-            .map_err(|e| {
-                log::error!("{}", e.to_string());
-                e
-            })?;
-
-        let availability = conn.exec_first::<Availability, &str, _>(
-            r#"SELECT * FROM Availability WHERE id = :id"#,
-            params! {"id" => new_id},
-        )?;
-        log::info!("Added Availability: {:?}", &availability);
-        Ok(availability)
+    ) -> Result<Option<Availability>> {
+        let result = Availability::create_from_input(&availability_input, &context.db_pool).await?;
+        tracing::info!("Added Availability: {:?}", &result);
+        Ok(result)
     }
 }
 

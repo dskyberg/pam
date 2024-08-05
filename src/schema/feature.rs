@@ -1,7 +1,11 @@
+use anyhow::{anyhow, Result};
 use juniper::GraphQLInputObject;
-use mysql::{from_row, params, prelude::*, Error as DBError, Row};
+use sqlx::FromRow;
 
-use crate::schema::{root::Context, Availability, Product};
+use crate::{
+    database::{paginate, Pool},
+    schema::{root::Context, Availability, Product},
+};
 
 /// Product
 #[derive(Default, Debug, FromRow)]
@@ -24,35 +28,66 @@ impl Feature {
     }
 
     /// walk backward from Product to Category
-    fn product(&self, context: &Context) -> Option<Product> {
-        let mut conn = context.db_pool.get().unwrap();
-        let result: Result<Option<Row>, DBError> = conn.exec_first(
-            "SELECT * FROM Product WHERE id=:id",
-            params! {"id" => &self.product_id},
-        );
-        if let Err(_err) = result {
-            None
-        } else {
-            let (id, name, category_id) = from_row(result.unwrap().unwrap());
-            Some(Product {
-                id,
-                name,
-                category_id,
-            })
-        }
+    async fn product(&self, context: &Context) -> Result<Option<Product>> {
+        let result = sqlx::query_as("SELECT * FROM Product WHERE id=$1")
+            .bind(&self.product_id)
+            .fetch_optional(&context.db_pool)
+            .await?;
+
+        Ok(result)
     }
 
-    fn availability(&self, context: &Context) -> Vec<Availability> {
-        let mut conn = context.db_pool.get().unwrap();
+    async fn availability(&self, context: &Context) -> Result<Vec<Availability>> {
+        let result = sqlx::query_as("SELECT * FROM Availability WHERE Availability.item_id = $1")
+            .bind(&self.id)
+            .fetch_all(&context.db_pool)
+            .await?;
+        Ok(result)
+    }
+}
 
-        conn.exec(
-            "SELECT * FROM Availability WHERE Availability.item_id = :id",
-            params! { "id" => &self.id },
+impl Feature {
+    pub async fn fetch_all(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        pool: &Pool,
+    ) -> Result<Vec<Self>> {
+        Ok(
+            sqlx::query_as(&paginate("SELECT * FROM feature", page_size, page)?)
+                .fetch_all(pool)
+                .await?,
         )
-        .unwrap()
-        .into_iter()
-        .map(Availability::from_row)
-        .collect()
+    }
+
+    pub async fn fetch_one(
+        id: Option<String>,
+        name: Option<String>,
+        pool: &Pool,
+    ) -> Result<Feature> {
+        let query = match (id, name) {
+            (Some(id), None) => {
+                sqlx::query_as("SELECT * FROM feature WHERE feature.id = $1").bind(id)
+            }
+            (None, Some(name)) => {
+                sqlx::query_as("SELECT * FROM feature WHERE feature.name = $1").bind(name)
+            }
+            _ => return Err(anyhow!("Either id or name must be provided")),
+        };
+
+        Ok(query.fetch_one(pool).await?)
+    }
+
+    pub async fn create_from_input(feature_input: &FeatureInput, pool: &Pool) -> Result<Feature> {
+        let product = Product::fetch_one(None, Some(feature_input.product.clone()), pool)
+            .await
+            .map_err(|_| anyhow!("Product not found: {}", feature_input.product))?;
+        Ok(
+            sqlx::query_as("INSERT INTO feature VALUES (gen_random_uuid(), $1, $2) RETURNING *")
+                .bind(&feature_input.name)
+                .bind(&product.id)
+                .fetch_one(pool)
+                .await?,
+        )
     }
 }
 
@@ -60,5 +95,5 @@ impl Feature {
 #[graphql(description = "Feature Input")]
 pub struct FeatureInput {
     pub name: String,
-    pub product_id: String,
+    pub product: String,
 }

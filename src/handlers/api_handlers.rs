@@ -13,7 +13,8 @@ pub async fn graphql(
     schema: web::Data<Schema>,
     data: web::Json<GraphQLRequest>,
 ) -> Result<HttpResponse, Error> {
-    log::trace!("{:#?}", &data);
+    let json = serde_json::to_string_pretty(&data).expect("Failed to serialize data");
+    tracing::info!("{}", &json);
     let ctx = Context {
         db_pool: pool.get_ref().to_owned(),
     };
@@ -26,12 +27,13 @@ pub async fn graphql(
 /// GraphiQL UI
 #[get("/graphiql")]
 async fn graphql_playground() -> impl Responder {
-    web::Html::new(graphiql_source("/graphql", None))
+    web::Html::new(graphiql_source("/api/graphql", None))
 }
 
 pub fn register(config: &mut web::ServiceConfig) {
-    config
-        .app_data(web::Data::new(create_schema()))
-        .service(graphql)
-        .service(graphql_playground);
+    config.app_data(web::Data::new(create_schema())).service(
+        web::scope("api")
+            .service(graphql)
+            .service(graphql_playground),
+    );
 }

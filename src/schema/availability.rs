@@ -1,18 +1,21 @@
+use anyhow::{anyhow, Result};
 use chrono::{self, NaiveDateTime};
-use juniper::{FieldResult, GraphQLInputObject};
-use mysql::{params, prelude::*};
+use juniper::GraphQLInputObject;
+use sqlx::FromRow;
+use uuid::Uuid;
 
-use super::{root::Context, Jurisdiction, LifecycleStage, StatusType};
+use crate::database::{paginate, Pool};
+
+use super::{root::Context, Comment, Compliance, Feature, Jurisdiction, Lifecycle, Product};
 
 #[derive(Default, Debug, PartialEq, Eq, FromRow)]
 pub struct Availability {
     pub id: String,
     /// The Product or Feature that is being made available
     pub item_id: String,
-    pub stage_id: String,
-    pub status_id: String,
     pub jurisdiction_id: String,
-    pub comment: Option<String>,
+    pub lifecycle_id: String,
+    pub compliance_id: String,
     pub last_updated: NaiveDateTime,
 }
 
@@ -25,23 +28,27 @@ impl Availability {
     fn item_id(&self) -> &str {
         &self.item_id
     }
-    #[graphql(
-        description = "The id of the associated lifecycle stage.  Use Availability.stage for the actual."
-    )]
-    fn stage_id(&self) -> &str {
-        &self.stage_id
-    }
-    #[graphql(
-        description = "The id of the associated status. Use Availability.status for the actual."
-    )]
-    fn status_id(&self) -> &str {
-        &self.status_id
-    }
+
     #[graphql(
         description = "The id of the associated jurisdiction. Use Availability.jurisdiction for the actual."
     )]
+
     fn jurisdiction_id(&self) -> &str {
         &self.jurisdiction_id
+    }
+
+    #[graphql(
+        description = "The id of the associated lifecycle stage.  Use Availability.lifecycle for the actual."
+    )]
+    fn lifecycle_id(&self) -> &str {
+        &self.lifecycle_id
+    }
+
+    #[graphql(
+        description = "The id of the associated compliance. Use Availability.compliance for the actual."
+    )]
+    fn compliance_id(&self) -> &str {
+        &self.compliance_id
     }
 
     #[graphql(description = "The data last updated")]
@@ -49,65 +56,62 @@ impl Availability {
         format!("{}", self.last_updated)
     }
 
-    #[graphql(description = "The linked status")]
-    fn status(&self, context: &Context) -> FieldResult<Option<StatusType>> {
-        let mut conn = context.db_pool.get().unwrap();
-
-        Ok(conn.exec_first::<StatusType, &str, _>(
-            "SELECT * FROM StatusType WHERE id = :id",
-            params! { "id" => &self.status_id },
-        )?)
+    #[graphql(description = "The linked Jurisdiction")]
+    async fn jurisdiction(&self, context: &Context) -> Result<Jurisdiction> {
+        let result = sqlx::query_as("SELECT * FROM Jurisdiction WHERE Jurisdiction.id = $1")
+            .bind(&self.jurisdiction_id)
+            .fetch_one(&context.db_pool)
+            .await?;
+        Ok(result)
     }
 
     #[graphql(description = "The linked Lifecycle")]
-    fn stage(&self, context: &Context) -> FieldResult<Option<LifecycleStage>> {
-        let mut conn = context.db_pool.get().unwrap();
-
-        Ok(conn.exec_first::<LifecycleStage, &str, _>(
-            "SELECT * FROM LifecycleStage WHERE id = :id",
-            params! { "id" => &self.stage_id },
-        )?)
+    async fn lifecycle(&self, context: &Context) -> Result<Option<Lifecycle>> {
+        let result = sqlx::query_as("SELECT * FROM Lifecycle WHERE id = $1")
+            .bind(&self.lifecycle_id)
+            .fetch_optional(&context.db_pool)
+            .await?;
+        Ok(result)
     }
 
-    #[graphql(description = "The linked Jurisdiction")]
-    fn jurisdiction(&self, context: &Context) -> Jurisdiction {
-        let mut conn = context.db_pool.get().unwrap();
-
-        let result = conn.exec_first::<Jurisdiction, &str, _>(
-            "SELECT * FROM Jurisdiction WHERE Jurisdiction.id = :id",
-            params! { "id" => &self.jurisdiction_id },
-        );
-        result.unwrap().unwrap()
+    #[graphql(description = "The linked status")]
+    async fn compliance(&self, context: &Context) -> Result<Option<Compliance>> {
+        let result = sqlx::query_as("SELECT * FROM Compliance WHERE id = $1")
+            .bind(&self.compliance_id)
+            .fetch_optional(&context.db_pool)
+            .await?;
+        Ok(result)
     }
 
-    fn comment(&self) -> &Option<String> {
-        &self.comment
+    #[graphql(description = "The linked status")]
+    async fn comments(&self, context: &Context) -> Result<Vec<Comment>> {
+        Comment::fetch_by_item_id(&self.id, &context.db_pool).await
     }
 
     #[graphql(description = "Summary of availability attributes as a single string")]
-    fn summary(&self, context: &Context) -> FieldResult<String> {
-        let mut conn = context.db_pool.get().unwrap();
-
-        let result = conn.exec_first::<AvailabilitySummary, &str, _>(
+    async fn summary(&self, context: &Context) -> Result<String> {
+        let result: Option<AvailabilitySummary> = sqlx::query_as(
             r#"SELECT
                 Jurisdiction.name as jurisdiction,
-                StatusType.name as status,
-                LifecycleStage.name as stage,
-                Availability.comment,
+                Lifecycle.name as lifecycle,
+                Compliance.name as compliance,
                 Availability.last_updated
             FROM Availability
             LEFT JOIN Jurisdiction ON Jurisdiction.id = Availability.jurisdiction_id
-            LEFT JOIN StatusType on StatusType.id = Availability.status_id
-            LEFT JOIN LifecycleStage on LifecycleStage.id = Availability.stage_id
-            WHERE Availability.id = :id"#,
-            params! { "id" => &self.id },
-        )?;
+            LEFT JOIN Lifecycle on Lifecycle.id = Availability.lifecycle_id
+            LEFT JOIN Compliance on Compliance.id = Availability.compliance_id
+            WHERE Availability.id = $1"#,
+        )
+        .bind(&self.id)
+        .fetch_optional(&context.db_pool)
+        .await?;
+
         match result {
             Some(summary) => Ok(format!(
                 "{}, {}, {}, {}, {}",
                 summary.jurisdiction,
-                summary.stage,
-                summary.status,
+                summary.lifecycle,
+                summary.compliance,
                 summary.comment.unwrap_or("".to_string()),
                 summary.last_updated
             )),
@@ -116,21 +120,161 @@ impl Availability {
     }
 }
 
+use either::{Either, Left, Right};
+
+impl Availability {
+    pub async fn fetch_all(
+        page_size: Option<i32>,
+        page: Option<i32>,
+        pool: &Pool,
+    ) -> Result<Vec<Availability>> {
+        Ok(
+            sqlx::query_as(&paginate("SELECT * FROM availability", page_size, page)?)
+                .fetch_all(pool)
+                .await?,
+        )
+    }
+
+    pub async fn fetch_by_id(id: &str, pool: &Pool) -> Result<Availability> {
+        Ok(
+            sqlx::query_as("SELECT * FROM availability WHERE availability.id = $1")
+                .bind(id)
+                .fetch_one(pool)
+                .await?,
+        )
+    }
+
+    pub async fn fetch_by_item_id_jurisdiction(
+        id: &str,
+        jurisdiction_name: &str,
+        pool: &Pool,
+    ) -> Result<Option<Jurisdiction>> {
+        let jurisdiction = Jurisdiction::fetch_one(None, Some(jurisdiction_name.to_owned()), pool)
+            .await
+            .map_err(|_| anyhow::anyhow!("Jurisdiction {} does not exist", jurisdiction_name))?;
+
+        Ok(sqlx::query_as(
+            r#"SELECT * from Availability
+            LEFT JOIN Jurisdiction ON Jurisdiction.id = Availability.jurisdiction_id
+            WHERE Availability.item_id = $1 and Jurisdiction.name = $2;"#,
+        )
+        .bind(id)
+        .bind(&jurisdiction.id)
+        .fetch_optional(pool)
+        .await?)
+    }
+
+    pub async fn create_from_input(input: &AvailabilityInput, pool: &Pool) -> Result<Option<Self>> {
+        let item_id = match input.item_name_to_item(pool).await? {
+            Left(product) => product.id,
+            Right(feature) => feature.id,
+        };
+
+        let jurisdiction = Jurisdiction::fetch_one(None, Some(input.jurisdiction.clone()), pool)
+            .await
+            .map_err(|_| anyhow!("Jurisdiction not found: {}", &input.jurisdiction))?;
+
+        let lifecycle = Lifecycle::fetch_one(None, Some(input.lifecycle.clone()), pool)
+            .await
+            .map_err(|_| anyhow!("Lifecycle not found: {}", &input.lifecycle))?;
+
+        let compliance = Compliance::fetch_one(None, Some(input.compliance.clone()), pool)
+            .await
+            .map_err(|_| anyhow!("Compliance not found: {}", &input.compliance))?;
+
+        Ok(sqlx::query_as(
+            r#"INSERT INTO Availability
+            VALUES ( $1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+            RETURNING *"#,
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&item_id)
+        .bind(&jurisdiction.id)
+        .bind(&lifecycle.id)
+        .bind(&compliance.id)
+        .bind(&input.comment)
+        .fetch_optional(pool)
+        .await?)
+    }
+
+    pub async fn update_from_input(
+        input: AvailabilityUpdateInput,
+        pool: &Pool,
+    ) -> Result<Availability> {
+        let mut separator = "";
+        let mut sql = String::from("UPDATE availability SET ");
+
+        if let Some(lifecycle_name) = input.lifecycle {
+            let lifecycle = Lifecycle::fetch_one(None, Some(lifecycle_name), pool).await?;
+            sql = format!("{}{}lifecycle_id = {}", sql, &separator, &lifecycle.id);
+            separator = ", ";
+        }
+
+        if let Some(compliance_name) = input.compliance {
+            let compliance = Compliance::fetch_one(None, Some(compliance_name), pool).await?;
+            sql = format!("{}{}compliance_id = {}", sql, &separator, compliance.id);
+            separator = ", ";
+        }
+
+        if let Some(comment) = input.comment {
+            sql = format!("{}{}comment = '{}'", sql, &separator, comment);
+            separator = ", ";
+        }
+
+        sql = format!(
+            "{}{}last_updated = CURRENT_TIMESTAMP WHERE availability.id = {} RETURNING *",
+            sql, &separator, input.id
+        );
+
+        tracing::info!("{}", &sql);
+        Ok(sqlx::query_as(&sql).fetch_one(pool).await?)
+    }
+}
+
+/// Return either a Product or Feature from the given name.
+async fn item_name_to_item(name: &str, pool: &Pool) -> Result<Either<Product, Feature>> {
+    if let Ok(product) = Product::fetch_one(None, Some(name.to_owned()), pool).await {
+        return Ok(Left(product));
+    }
+    if let Ok(feature) = Feature::fetch_one(None, Some(name.to_owned()), pool).await {
+        return Ok(Right(feature));
+    }
+    Err(anyhow!(
+        "Item name is neither a Product nor a Feature: {}",
+        name
+    ))
+}
+
 #[derive(GraphQLInputObject)]
 #[graphql(description = "Availability Input")]
 pub struct AvailabilityInput {
     pub item_name: String,
     pub jurisdiction: String,
-    pub stage: String,
-    pub status: String,
+    pub lifecycle: String,
+    pub compliance: String,
+    pub comment: Option<String>,
+}
+
+impl AvailabilityInput {
+    pub async fn item_name_to_item(&self, pool: &Pool) -> Result<Either<Product, Feature>> {
+        item_name_to_item(&self.item_name, pool).await
+    }
+}
+
+#[derive(GraphQLInputObject)]
+#[graphql(description = "Availability Update Input")]
+pub struct AvailabilityUpdateInput {
+    pub id: String,
+    pub lifecycle: Option<String>,
+    pub compliance: Option<String>,
     pub comment: Option<String>,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, FromRow)]
 pub struct AvailabilitySummary {
     pub jurisdiction: String,
-    pub status: String,
-    pub stage: String,
+    pub lifecycle: String,
+    pub compliance: String,
     pub comment: Option<String>,
     pub last_updated: NaiveDateTime,
 }
