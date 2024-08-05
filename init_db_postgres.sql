@@ -1,3 +1,4 @@
+
 DROP TABLE IF EXISTS availability;
 DROP TABLE IF EXISTS lifecycle;
 DROP TABLE IF EXISTS compliance;

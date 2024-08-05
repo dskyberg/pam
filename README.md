@@ -11,7 +11,7 @@ Create a `env` file in the project root with the following
 ```bash
 POSTGRES_USER='<your user>'
 POSTGRES_PASSWORD='<your password>'
-POSTGRESL_SCHEMA='availability_matrix'
+POSTGRES_SCHEMA='availability_matrix'
 DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost/${POSTGRESL_SCHEMA}
 ```
 
@@ -23,11 +23,7 @@ DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost/${POSTGR
 docker compose -f docker-compose-postgres.yml up -d
 ```
 
-- Use the DB Admin tool of your choice to create a databased called `availability_matrix`
-
-- Use the method of your choice to run the SQL script `init_db_postgres.qsl`
-
-Maybe when the dust settles on the schema I'll auto load it in the docker-compose file.
+The docker-compose script links an init SQL.  So, if it succeeds, you're good to go.
 
 ## Run the backend
 
