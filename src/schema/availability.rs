@@ -108,12 +108,8 @@ impl Availability {
 
         match result {
             Some(summary) => Ok(format!(
-                "{}, {}, {}, {}, {}",
-                summary.jurisdiction,
-                summary.lifecycle,
-                summary.compliance,
-                summary.comment.unwrap_or("".to_string()),
-                summary.last_updated
+                "{}, {}, {}, {}",
+                summary.jurisdiction, summary.lifecycle, summary.compliance, summary.last_updated
             )),
             None => Ok("Not Found".to_owned()),
         }
@@ -275,6 +271,5 @@ pub struct AvailabilitySummary {
     pub jurisdiction: String,
     pub lifecycle: String,
     pub compliance: String,
-    pub comment: Option<String>,
     pub last_updated: NaiveDateTime,
 }
