@@ -1,0 +1,32 @@
+services:
+  server_cache:
+    image: redis
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - pam_redis:/data
+    healthcheck:
+      test: "[ $$(redis-cli -a $REDIS_PASSWORD ping) = 'PONG' ]"
+
+  server_db:
+    image: postgres
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      PGDATA: /data/postgres
+      POSTGRES_DB: ${DATABASE_SCHEMA}
+    volumes:
+      - pam_postgres:/data/postgres
+      - ./init_db_postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+
+volumes:
+  pam_postgres:
+  pam_redis:
