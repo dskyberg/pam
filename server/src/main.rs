@@ -4,10 +4,13 @@
 use actix_cors::Cors;
 use actix_web::{web::Data, App, HttpServer};
 use anyhow::Result;
+use std::process;
 use tracing_actix_web::TracingLogger;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use url::Url;
 
-use self::database::get_db_pool;
-
+use database::get_db_pool;
 mod database;
 mod handlers;
 mod schema;
@@ -20,19 +23,27 @@ lazy_static::lazy_static! {
 #[actix_web::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    tracing_subscriber::fmt::init();
-    // env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    let (layer, task) = tracing_loki::builder()
+        .label("host", "mine")?
+        .extra_field("pid", format!("{}", process::id()))?
+        .build_url(Url::parse("http://127.0.0.1:3100").unwrap())?;
+
+    // We need to register our layer with `tracing`.
+    tracing_subscriber::registry()
+        .with(layer)
+        // One could add more layers here, for example logging to stdout:
+        // .with(tracing_subscriber::fmt::Layer::new())
+        .init();
+    tokio::spawn(task);
 
     let pool = get_db_pool().await?;
 
     // Create Juniper schema
-    tracing::info!("starting HTTP server on {}:{}", *SERVER_HOST, *SERVER_PORT);
-    tracing::info!(
-        "GraphiQL playground: http://{}:{}/api/graphiql",
-        *SERVER_HOST,
-        *SERVER_PORT
+    println!("starting HTTP server on {}:{}", *SERVER_HOST, *SERVER_PORT);
+    println!(
+        "graphiql playground at http://{}:{}/graph/graphiql",
+        *SERVER_HOST, *SERVER_PORT
     );
-
     // Start HTTP server
     HttpServer::new(move || {
         App::new()
@@ -40,6 +51,7 @@ async fn main() -> Result<()> {
             .wrap(TracingLogger::default())
             .wrap(Cors::permissive())
             .app_data(Data::new(pool.clone()))
+            .configure(handlers::graph_handlers::register)
             .configure(handlers::api_handlers::register)
             .configure(handlers::static_handlers::register)
     })

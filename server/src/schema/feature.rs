@@ -78,13 +78,19 @@ impl Feature {
     }
 
     pub async fn create(name: &str, product_id: &str, pool: &Pool) -> Result<Feature> {
-        Ok(
+        let result =
             sqlx::query_as("INSERT INTO feature VALUES (gen_random_uuid(), $1, $2) RETURNING *")
                 .bind(name)
                 .bind(product_id)
                 .fetch_one(pool)
-                .await?,
-        )
+                .await?;
+        tracing::info!(
+            schema = "Feature",
+            task = "add",
+            result = "success",
+            name = name,
+        );
+        Ok(result)
     }
 
     pub async fn create_from_input(feature_input: &FeatureInput, pool: &Pool) -> Result<Feature> {

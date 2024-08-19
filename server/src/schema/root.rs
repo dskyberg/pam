@@ -2,7 +2,7 @@ use anyhow::Result;
 use juniper::{graphql_object, EmptySubscription, RootNode};
 
 use super::{
-    Availability, AvailabilityInput, Category, Cell, Compliance, Feature, FeatureInput,
+    Availability, AvailabilityInput, Category, Cell, CellInput, Compliance, Feature, FeatureInput,
     Jurisdiction, JurisdictionInput, Lifecycle, Matrix, Product, ProductInput,
 };
 use crate::database::Pool;
@@ -167,52 +167,41 @@ pub struct MutationRoot;
 
 #[graphql_object(Context = Context)]
 impl MutationRoot {
-    async fn create_category(context: &Context, category_name: String) -> Result<Category> {
-        let result = Category::create(&category_name, &context.db_pool).await?;
-        tracing::trace!("Inserted {:?}", &result);
-        Ok(result)
+    async fn create_category(context: &Context, name: String) -> Result<Category> {
+        Category::create(&name, &context.db_pool).await
     }
 
-    async fn create_product(context: &Context, product_input: ProductInput) -> Result<Product> {
-        let result = Product::create_from_input(&product_input, &context.db_pool).await?;
-        tracing::trace!("Inserted {:?}", &result);
-        Ok(result)
+    async fn create_product(context: &Context, input: ProductInput) -> Result<Product> {
+        Product::create_from_input(&input, &context.db_pool).await
     }
 
-    async fn create_feature(context: &Context, feature_input: FeatureInput) -> Result<Feature> {
-        let result = Feature::create_from_input(&feature_input, &context.db_pool).await?;
-        tracing::trace!("Inserted {:?}", &result);
-        Ok(result)
+    async fn create_feature(context: &Context, input: FeatureInput) -> Result<Feature> {
+        Feature::create_from_input(&input, &context.db_pool).await
     }
 
     async fn create_lifecycle(context: &Context, name: String) -> Result<Lifecycle> {
-        let result = Lifecycle::create(&name, &context.db_pool).await?;
-        tracing::trace!("Inserted {:?}", &result);
-        Ok(result)
+        Lifecycle::create(&name, &context.db_pool).await
     }
 
     async fn create_compliance(context: &Context, name: String) -> Result<Compliance> {
-        let result = Compliance::create(&name, &context.db_pool).await?;
-        tracing::trace!("Inserted {:?}", &result);
-        Ok(result)
+        Compliance::create(&name, &context.db_pool).await
     }
 
     async fn create_jurisdiction(
         context: &Context,
-        jurisdiction: JurisdictionInput,
+        input: JurisdictionInput,
     ) -> Result<Jurisdiction> {
-        let result = Jurisdiction::create_from_input(&jurisdiction, &context.db_pool).await?;
-        tracing::trace!("Inserted {:?}", &result);
-        Ok(result)
+        Jurisdiction::create_from_input(&input, &context.db_pool).await
     }
 
+    async fn create_cell(context: &Context, input: CellInput) -> Result<Cell> {
+        Cell::create_from_input(&input, &context.db_pool).await
+    }
     async fn create_availability(
         context: &Context,
-        availability_input: AvailabilityInput,
+        input: AvailabilityInput,
     ) -> Result<Availability> {
-        let result = Availability::create_from_input(&availability_input, &context.db_pool).await?;
-        tracing::info!("Added Availability: {:?}", &result);
-        Ok(result)
+        Availability::create_from_input(&input, &context.db_pool).await
     }
 }
 

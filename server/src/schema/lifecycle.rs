@@ -45,7 +45,7 @@ impl Lifecycle {
                 sqlx::query_as("SELECT * FROM lifecycle WHERE ifecycle.id = $1").bind(id)
             }
             (None, Some(name)) => {
-                sqlx::query_as("SELECT * FROM ifecycle WHERE lifecycle.name = $1").bind(name)
+                sqlx::query_as("SELECT * FROM lifecycle WHERE lifecycle.name = $1").bind(name)
             }
             _ => return Err(anyhow!("Either id or name must be provided")),
         };
@@ -54,11 +54,17 @@ impl Lifecycle {
     }
 
     pub async fn create(name: &str, pool: &Pool) -> Result<Lifecycle> {
-        Ok(
+        let result =
             sqlx::query_as("INSERT INTO Lifecycle VALUES (gen_random_uuid(), $1) RETURNING *")
                 .bind(name)
                 .fetch_one(pool)
-                .await?,
-        )
+                .await?;
+        tracing::info!(
+            schema = "Lifecycle",
+            task = "add",
+            result = "success",
+            name = name,
+        );
+        Ok(result)
     }
 }

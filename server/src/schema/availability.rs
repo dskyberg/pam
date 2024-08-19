@@ -5,7 +5,7 @@ use sqlx::FromRow;
 
 use crate::database::{paginate, Pool};
 
-use super::{root::Context, Comment, Compliance, Feature, Jurisdiction, Lifecycle, Product};
+use super::{root::Context, Comment, Compliance, Jurisdiction, Lifecycle};
 
 #[derive(Default, Debug, PartialEq, Eq, FromRow)]
 pub struct Availability {
@@ -115,8 +115,6 @@ impl Availability {
     }
 }
 
-use either::{Either, Left, Right};
-
 impl Availability {
     pub async fn fetch_all(
         page_size: Option<i32>,
@@ -166,7 +164,7 @@ impl Availability {
         compliance_id: &str,
         pool: &Pool,
     ) -> Result<Self> {
-        Ok(sqlx::query_as(
+        let result = sqlx::query_as(
             r#"INSERT INTO Availability
             VALUES ( gen_random_uuid(), $1, $2, $3, $4, CURRENT_TIMESTAMP)
             RETURNING *"#,
@@ -176,14 +174,18 @@ impl Availability {
         .bind(lifecycle_id)
         .bind(compliance_id)
         .fetch_one(pool)
-        .await?)
-    }
-    pub async fn create_from_input(input: &AvailabilityInput, pool: &Pool) -> Result<Self> {
-        let item_id = match input.item_name_to_item(pool).await? {
-            Left(product) => product.id,
-            Right(feature) => feature.id,
-        };
+        .await?;
 
+        tracing::info!(
+            schema = "Availability",
+            task = "add",
+            result = "success",
+            item_id = item_id
+        );
+        Ok(result)
+    }
+
+    pub async fn create_from_input(input: &AvailabilityInput, pool: &Pool) -> Result<Self> {
         let jurisdiction = Jurisdiction::fetch_one(None, Some(input.jurisdiction.clone()), pool)
             .await
             .map_err(|_| anyhow!("Jurisdiction not found: {}", &input.jurisdiction))?;
@@ -197,7 +199,7 @@ impl Availability {
             .map_err(|_| anyhow!("Compliance not found: {}", &input.compliance))?;
 
         Self::create(
-            &item_id,
+            &input.item_id,
             &jurisdiction.id,
             &lifecycle.id,
             &compliance.id,
@@ -206,20 +208,22 @@ impl Availability {
         .await
     }
 
-    pub async fn update_from_input(
-        input: AvailabilityUpdateInput,
+    pub async fn update(
+        id: String,
+        lifecycle: Option<String>,
+        compliance: Option<String>,
         pool: &Pool,
     ) -> Result<Availability> {
         let mut separator = "";
         let mut sql = String::from("UPDATE availability SET ");
 
-        if let Some(lifecycle_name) = input.lifecycle {
+        if let Some(lifecycle_name) = lifecycle {
             let lifecycle = Lifecycle::fetch_one(None, Some(lifecycle_name), pool).await?;
             sql = format!("{}{}lifecycle_id = {}", sql, &separator, &lifecycle.id);
             separator = ", ";
         }
 
-        if let Some(compliance_name) = input.compliance {
+        if let Some(compliance_name) = compliance {
             let compliance = Compliance::fetch_one(None, Some(compliance_name), pool).await?;
             sql = format!("{}{}compliance_id = {}", sql, &separator, compliance.id);
             separator = ", ";
@@ -227,41 +231,36 @@ impl Availability {
 
         sql = format!(
             "{}{}last_updated = CURRENT_TIMESTAMP WHERE availability.id = {} RETURNING *",
-            sql, &separator, input.id
+            sql, &separator, id
         );
 
-        tracing::info!("{}", &sql);
-        Ok(sqlx::query_as(&sql).fetch_one(pool).await?)
-    }
-}
+        let result = sqlx::query_as(&sql).fetch_one(pool).await?;
 
-/// Return either a Product or Feature from the given name.
-async fn item_name_to_item(name: &str, pool: &Pool) -> Result<Either<Product, Feature>> {
-    if let Ok(product) = Product::fetch_one(None, Some(name.to_owned()), pool).await {
-        return Ok(Left(product));
+        tracing::info!(
+            schema = "Availability",
+            task = "update",
+            result = "success",
+            "{}",
+            &sql
+        );
+        Ok(result)
     }
-    if let Ok(feature) = Feature::fetch_one(None, Some(name.to_owned()), pool).await {
-        return Ok(Right(feature));
+
+    pub async fn update_from_input(
+        input: AvailabilityUpdateInput,
+        pool: &Pool,
+    ) -> Result<Availability> {
+        Self::update(input.id, input.lifecycle, input.compliance, pool).await
     }
-    Err(anyhow!(
-        "Item name is neither a Product nor a Feature: {}",
-        name
-    ))
 }
 
 #[derive(GraphQLInputObject)]
 #[graphql(description = "Availability Input")]
 pub struct AvailabilityInput {
-    pub item_name: String,
+    pub item_id: String,
     pub jurisdiction: String,
     pub lifecycle: String,
     pub compliance: String,
-}
-
-impl AvailabilityInput {
-    pub async fn item_name_to_item(&self, pool: &Pool) -> Result<Either<Product, Feature>> {
-        item_name_to_item(&self.item_name, pool).await
-    }
 }
 
 #[derive(GraphQLInputObject)]

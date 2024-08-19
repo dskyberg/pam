@@ -65,14 +65,25 @@ impl Jurisdiction {
         Ok(query.fetch_one(pool).await?)
     }
 
-    pub async fn create_from_input(input: &JurisdictionInput, pool: &Pool) -> Result<Jurisdiction> {
-        Ok(
-            sqlx::query_as("INSERT INTO feature VALUES (gen_random_uuid(), $1, $2) RETURNING *")
-                .bind(&input.name)
-                .bind(&input.title)
-                .fetch_one(pool)
-                .await?,
+    pub async fn create(name: &str, title: &str, pool: &Pool) -> Result<Jurisdiction> {
+        let result = sqlx::query_as(
+            "INSERT INTO jurisdiction VALUES (gen_random_uuid(), $1, $2) RETURNING *",
         )
+        .bind(name)
+        .bind(title)
+        .fetch_one(pool)
+        .await?;
+        tracing::info!(
+            schema = "Jurisdiction",
+            task = "add",
+            result = "success",
+            name = name,
+        );
+        Ok(result)
+    }
+
+    pub async fn create_from_input(input: &JurisdictionInput, pool: &Pool) -> Result<Jurisdiction> {
+        Self::create(&input.name, &input.title, pool).await
     }
 
     pub async fn delete(

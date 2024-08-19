@@ -90,13 +90,18 @@ impl Product {
     }
 
     pub async fn create(name: &str, category_id: &str, pool: &Pool) -> Result<Product> {
-        let result = sqlx::query_as(
-            "INSERT INTO Product(id, name, category_id) VALUES(gen_random_uuid(),$1, $2, $3) RETURNING *",
-        )
-        .bind(name)
-        .bind(category_id)
-        .fetch_one(pool)
-        .await?;
+        let result =
+            sqlx::query_as("INSERT INTO product VALUES(gen_random_uuid(),$1, $2) RETURNING *")
+                .bind(name)
+                .bind(category_id)
+                .fetch_one(pool)
+                .await?;
+        tracing::info!(
+            schema = "Product",
+            task = "add",
+            result = "success",
+            name = name,
+        );
         Ok(result)
     }
 

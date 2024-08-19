@@ -38,11 +38,11 @@ impl Category {
 
 #[derive(Debug, Clone, FromRow)]
 struct Count {
-    pub count: i32,
+    pub count: i64,
 }
 
 impl Category {
-    pub async fn count(pool: &Pool) -> Result<i32> {
+    pub async fn count(pool: &Pool) -> Result<i64> {
         let count: Count = sqlx::query_as("SELECT COUNT (id) FROM category")
             .fetch_one(pool)
             .await?;
@@ -81,11 +81,18 @@ impl Category {
     }
 
     pub async fn create(name: &str, pool: &Pool) -> Result<Category> {
-        Ok(
+        let result =
             sqlx::query_as("INSERT INTO category VALUES (gen_random_uuid(), $1) RETURNING *")
                 .bind(name)
                 .fetch_one(pool)
-                .await?,
-        )
+                .await?;
+        tracing::info!(
+            schema = "Category",
+            task = "add",
+            result = "success",
+            name = name
+        );
+
+        Ok(result)
     }
 }

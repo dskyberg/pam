@@ -54,11 +54,17 @@ impl Compliance {
     }
 
     pub async fn create(name: &str, pool: &Pool) -> Result<Compliance> {
-        Ok(
+        let result =
             sqlx::query_as("INSERT INTO Compliance VALUES (gen_random_uuid(), $1) RETURNING *")
                 .bind(name)
                 .fetch_one(pool)
-                .await?,
-        )
+                .await?;
+        tracing::info!(
+            schema = "CVompliance",
+            task = "add",
+            result = "success",
+            name = name,
+        );
+        Ok(result)
     }
 }

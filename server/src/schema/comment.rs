@@ -52,4 +52,26 @@ impl Comment {
         .fetch_all(pool)
         .await?)
     }
+
+    pub async fn create(
+        item_id: &str,
+        text: &str,
+        created_by: Option<&str>,
+        pool: &Pool,
+    ) -> Result<Comment> {
+        let result =  sqlx::query_as("INSERT INTO comment (id, item_id, text, created_by, created) VALUES (gen_random_uuid(), $1, $2, $3, CURRENT_TIMESTAMP) RETURNING *")
+                .bind(item_id)
+                .bind(text)
+                .bind(created_by)
+                .fetch_one(pool)
+                .await?;
+        tracing::info!(
+            schema = "Comment",
+            task = "add",
+            result = "success",
+            text = text,
+        );
+
+        Ok(result)
+    }
 }
