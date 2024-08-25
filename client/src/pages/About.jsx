@@ -11,7 +11,8 @@ export default function About() {
     const navigate = useNavigate();
 
     return (
-        <Card sx={{ my: 4 }}>
+
+        <Card sx={{ my: 4, margin: "1em" }}>
             <CardContent>
                 <Typography variant="h4" component="h1" sx={{ mb: 2 }}>
                     About Page
@@ -33,5 +34,6 @@ export default function About() {
                 </Button>
             </CardActions>
         </Card>
+
     )
 }

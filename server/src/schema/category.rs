@@ -36,20 +36,7 @@ impl Category {
     }
 }
 
-#[derive(Debug, Clone, FromRow)]
-struct Count {
-    pub count: i64,
-}
-
 impl Category {
-    pub async fn count(pool: &Pool) -> Result<i64> {
-        let count: Count = sqlx::query_as("SELECT COUNT (id) FROM category")
-            .fetch_one(pool)
-            .await?;
-
-        Ok(count.count)
-    }
-
     pub async fn fetch_all(
         page_size: Option<i32>,
         page: Option<i32>,

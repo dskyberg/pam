@@ -10,6 +10,7 @@ use super::root::Context;
 pub struct Lifecycle {
     pub id: String,
     pub name: String,
+    pub description: String,
 }
 
 #[graphql_object(Context = Context)]
@@ -19,6 +20,9 @@ impl Lifecycle {
     }
     fn name(&self) -> &str {
         &self.name
+    }
+    fn description(&self) -> &str {
+        &self.description
     }
 }
 
@@ -53,10 +57,11 @@ impl Lifecycle {
         Ok(query.fetch_one(pool).await?)
     }
 
-    pub async fn create(name: &str, pool: &Pool) -> Result<Lifecycle> {
+    pub async fn create(name: &str, description: &str, pool: &Pool) -> Result<Lifecycle> {
         let result =
-            sqlx::query_as("INSERT INTO Lifecycle VALUES (gen_random_uuid(), $1) RETURNING *")
+            sqlx::query_as("INSERT INTO Lifecycle VALUES (gen_random_uuid(), $1, $2) RETURNING *")
                 .bind(name)
+                .bind(description)
                 .fetch_one(pool)
                 .await?;
         tracing::info!(
@@ -64,6 +69,7 @@ impl Lifecycle {
             task = "add",
             result = "success",
             name = name,
+            description = description,
         );
         Ok(result)
     }

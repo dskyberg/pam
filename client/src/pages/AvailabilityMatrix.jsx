@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery, gql } from "@apollo/client";
+import { useQuery } from "@apollo/client";
+import { GET_FULL_MATRIX } from "../graph";
 import { styled } from "@mui/material/styles";
 import Paper from "@mui/material/Paper";
 import Table from "@mui/material/Table";
@@ -8,128 +9,44 @@ import TableCell, { tableCellClasses } from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import AvailabilityDialog from "../components/AvailabilityDialog";
 import TableFallack from "../components/TableFallback";
 
-const GET_MATRIX = gql`
-  query Matrix {
-    matrix {
-      categories {
-        id
-        name
-        products {
-          id
-          name
-          availability {
-            id
-            jurisdiction {
-              id
-            }
-            lifecycle {
-              id
-              name
-            }
-            compliance {
-              id
-              name
-            }
-            lastUpdated
-            comments {
-              id
-              text
-              created
-            }
-          }
-          features {
-            id
-            name
-            availability {
-              id
-              jurisdiction {
-                id
-              }
-              lifecycle {
-                id
-                name
-              }
-              compliance {
-                id
-                name
-              }
-              lastUpdated
-              comments {
-                id
-                text
-                created
-              }
-            }
-          }
-        }
-      }
-      compliances {
-        id
-        name
-      }
-      lifecycles {
-        id
-        name
-      }
-      jurisdictions {
-        id
-        name
-        title
-        cells {
-          id
-          name
-          csp
-          cspRegion
-          country
-          region
-        }
-      }
-    }
-  }
-`;
+import { appStore } from '../state/appStore';
 
-const availability = (a) => {
-  if (a == undefined) {
-    return "";
-  }
-  return [a.lifecycle.name ?? "", a.compliance.name ?? ""].join(", ");
-};
 
 const jurisdictions = (jurisdictions, item, onClick) => {
+  const displayAvailability = (a) => {
+    if (a == undefined) {
+      return "";
+    }
+    return [a.lifecycle.name ?? "", a.compliance.name ?? ""].join(", ");
+  };
   return jurisdictions.map((j) => {
     const a = item.availability.find((a) => a.jurisdiction.id == j.id)
-    return (<StyledTableCell key={j.id + ":" + item.id} onClick={() => onClick(item.name, a)}>
-      {availability(a)}
+    return (<StyledTableCell key={j.id + ":" + item.id} onClick={() => onClick(a)}>
+      {displayAvailability(a)}
     </StyledTableCell>)
   });
 };
 
-const matrix = (matrix, onClick) => {
-  let spans = {};
+function Matrix({ matrix, onClick }) {
+
   let rows = [];
   let jurisdiction_cols = matrix.jurisdictions.length;
 
-  for (let category of matrix.categories) {
-    let category_rows = 0;
-    for (let product of category.products) {
-      let product_rows = product.features.length + 1;
-      spans[product.id] = product_rows;
-      category_rows += product_rows;
-    }
-    spans[category.id] = category_rows;
+  const handleClick = (item) => {
+    appStore.send({ type: 'setActiveItem', item })
   }
+
 
   for (let category of matrix.categories) {
     for (let product of category.products) {
       rows.push(
         <StyledTableRow key={"row" + category.id + product.id + "_1"}>
           <StyledTableCell key={category.id + "_1"}> {category.name}</StyledTableCell>
-          <StyledTableCell key={product.id + "_1"}>{product.name}</StyledTableCell>
+          <StyledTableCell key={product.id + "_1"} onClick={() => handleClick(product)}>{product.name}</StyledTableCell>
           <StyledTableCell key={product.id + "_feature" + "_1"}></StyledTableCell>
-          {[...jurisdictions(matrix.jurisdictions, product, onClick)]}
+          {[...jurisdictions(matrix.jurisdictions, product, handleClick)]}
         </StyledTableRow>,
       );
       for (let feature of product.features) {
@@ -137,8 +54,8 @@ const matrix = (matrix, onClick) => {
           <StyledTableRow key={"row" + category.id + product.id + feature.id + "_2"}>
             <StyledTableCell key={category.id + "_2"}> {category.name}</StyledTableCell>
             <StyledTableCell key={product.id + "_2"}>{product.name}</StyledTableCell>
-            <StyledTableCell key={feature.id + "_feature" + "_2"}>{feature.name}</StyledTableCell>
-            {[...jurisdictions(matrix.jurisdictions, feature, onClick)]}
+            <StyledTableCell key={feature.id + "_feature" + "_2"} onClick={() => handleClick(feature)}>{feature.name}</StyledTableCell>
+            {[...jurisdictions(matrix.jurisdictions, feature, handleClick)]}
           </StyledTableRow>,
         );
       }
@@ -146,7 +63,8 @@ const matrix = (matrix, onClick) => {
   }
 
   return rows;
-};
+}
+
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
   [`&.${tableCellClasses.head}`]: {
@@ -170,7 +88,8 @@ const StyledTableRow = styled(TableRow)(({ theme }) => ({
 
 export default function AvailabilityMatrix() {
   const [open, setOpen] = useState(false);
-  const { loading, error, data } = useQuery(GET_MATRIX);
+  const [windowHeight, setWindowHeight] = useState(720);
+  const { loading, error, data } = useQuery(GET_FULL_MATRIX);
   const [availability, setAvailability] = useState(null);
   const [item, setItem] = useState(null)
 
@@ -184,40 +103,37 @@ export default function AvailabilityMatrix() {
     setOpen(false);
   };
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p>Error : {error.message}</p>;
-
-  let jurisdictions = data.matrix.jurisdictions;
 
   if (loading) {
     return <TableFallack />;
   }
+
   if (error) {
-    return <Paper sx={{ width: "100%", overflow: "hidden", marginTop: "1em" }}>{error}</Paper>;
+    return <Paper sx={{ width: "100%", overflow: "hidden" }}>{error}</Paper>;
   }
 
+
   return (
-    <>
-      <Paper sx={{ width: "100%", overflow: "hidden", height: 640, margin: "1em" }}>
-        <TableContainer sx={{ width: "100%", maxHeight: 640 }}>
-          <Table stickyHeader aria-label="sticky table">
-            <TableHead>
-              <TableRow>
-                <StyledTableCell style={{ minWidth: 170 }}>{"Category"}</StyledTableCell>
-                <StyledTableCell style={{ minWidth: 170 }}>{"Product (SKU)"}</StyledTableCell>
-                <StyledTableCell style={{ minWidth: 170 }}>{"Feature"}</StyledTableCell>
-                {jurisdictions.map((jurisdiction) => (
-                  <StyledTableCell key={jurisdiction.id} style={{ minWidth: 100 }}>
-                    {jurisdiction.name}
-                  </StyledTableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>{matrix(data.matrix, handleClickOpen)}</TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-      <AvailabilityDialog open={open} onClose={handleClose} item={item} availability={availability} />
-    </>
+    <div sx={{ width: "100%", overflow: "hidden", height: windowHeight, marginTop: "1em" }}>
+      <TableContainer sx={{ width: "100%", maxHeight: windowHeight, padding: 0 }}>
+        <Table stickyHeader aria-label="sticky table">
+          <TableHead>
+            <TableRow>
+              <StyledTableCell style={{ minWidth: 170 }}>{"Category"}</StyledTableCell>
+              <StyledTableCell style={{ minWidth: 170 }}>{"Product (SKU)"}</StyledTableCell>
+              <StyledTableCell style={{ minWidth: 170 }}>{"Feature"}</StyledTableCell>
+              {data.matrix.jurisdictions.map((jurisdiction) => (
+                <StyledTableCell key={jurisdiction.id} style={{ minWidth: 100 }}>
+                  {jurisdiction.name}
+                </StyledTableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            <Matrix matrix={data.matrix} onClick={handleClickOpen} />
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </div>
   );
 }

@@ -85,23 +85,6 @@ impl Jurisdiction {
     pub async fn create_from_input(input: &JurisdictionInput, pool: &Pool) -> Result<Jurisdiction> {
         Self::create(&input.name, &input.title, pool).await
     }
-
-    pub async fn delete(
-        id: Option<String>,
-        name: Option<String>,
-        pool: &Pool,
-    ) -> Result<Jurisdiction> {
-        let query = match (id, name) {
-            (Some(id), None) => {
-                sqlx::query_as("DELETE FROM jurisdiction WHERE jurisdiction.id = $1").bind(id)
-            }
-            (None, Some(name)) => {
-                sqlx::query_as("DELETE FROM jurisdiction WHERE jurisdiction.name = $1").bind(name)
-            }
-            _ => return Err(anyhow!("Either id or name must be provided")),
-        };
-        Ok(query.fetch_one(pool).await?)
-    }
 }
 
 #[derive(GraphQLInputObject)]

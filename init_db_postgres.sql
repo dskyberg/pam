@@ -61,6 +61,7 @@ CREATE TABLE "compliance" (
 CREATE TABLE "lifecycle" (
     id character(36) NOT NULL,
     name character varying(10) NOT NULL,
+    description character varying(128) NOT NULL,
     CONSTRAINT "lifecycle_pkey" PRIMARY KEY (id),
     CONSTRAINT "lifecycle_name_UNIQUE" UNIQUE (name)
 );

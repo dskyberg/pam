@@ -1,4 +1,5 @@
-import { useQuery, gql } from '@apollo/client';
+import { useQuery } from '@apollo/client';
+import { GET_MATRIX } from '../graph';
 import { styled } from '@mui/material/styles';
 import Paper from '@mui/material/Paper';
 import Table from '@mui/material/Table';
@@ -14,6 +15,7 @@ import Collapse from '@mui/material/Collapse';
 import IconButton from '@mui/material/IconButton';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import { Typography } from '@mui/material';
 
 const columns = [
     { id: 'name', label: 'Name', minWidth: 100 },
@@ -63,29 +65,19 @@ const CellSkeleton = () => (
 )
 
 
-const GET_JURISDICTIONS = gql`query Jurisdictions($pageSize: Int, $page: Int) {
-    jurisdictions(pageSize: $pageSize, page: $page) {
-        id
-        name
-        title
-        cells {
-            id
-            name
-        }
-    }
-}`;
 
 
 export default function Jurisdictions() {
 
-    const { loading, error, data } = useQuery(GET_JURISDICTIONS, { variables: { pageSize: 25, page: 1 } });
+    const { loading, error, data } = useQuery(GET_MATRIX);
 
 
     if (loading) return <p>Loading...</p>;
     if (error) return <p>Error : {error.message}</p>;
 
     return (
-        <Paper sx={{ width: '100%', overflow: 'hidden', marginTop: '1em' }}>
+        <Paper sx={{ width: '100%', overflow: 'hidden', margin: '1em' }}>
+            <Typography variant="h6">Jurisdictions</Typography>
             <TableContainer sx={{ maxHeight: 440 }}>
                 <Table stickyHeader aria-label="sticky table">
                     <TableHead>
@@ -102,7 +94,7 @@ export default function Jurisdictions() {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {data.jurisdictions.map((row) => {
+                        {data.matrix.jurisdictions.map((row) => {
                             return (
                                 <StyledTableRow hover role="checkbox" tabIndex={-1} key={row.id}>
                                     {columns.map((column) => {

@@ -1,0 +1,32 @@
+#!/usr/bin/env zsh
+EXCLUDES=('o11y_grafana-storage' "second" "third" "fourth")
+
+#docker compose down
+LIST=$(docker volume ls -q)
+
+function is_in {
+    for ex in $EXCLUDES
+    do
+
+        if [[ $1 == "$ex" ]]
+        then
+            return 0
+        fi
+    done
+    return 1
+}
+
+function volumes_safe_remove() {
+for vol in $(docker volume ls -q)
+do
+    if (is_in "$vol");
+    then
+    ;
+    else
+        docker volume rm $vol
+    fi
+done
+}
+
+
+volumes_safe_remove

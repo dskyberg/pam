@@ -4,15 +4,13 @@
 use actix_cors::Cors;
 use actix_web::{web::Data, App, HttpServer};
 use anyhow::Result;
-use std::process;
 use tracing_actix_web::TracingLogger;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use url::Url;
 
 use database::get_db_pool;
+
 mod database;
 mod handlers;
+mod o11y;
 mod schema;
 
 lazy_static::lazy_static! {
@@ -23,18 +21,7 @@ lazy_static::lazy_static! {
 #[actix_web::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    let (layer, task) = tracing_loki::builder()
-        .label("host", "mine")?
-        .extra_field("pid", format!("{}", process::id()))?
-        .build_url(Url::parse("http://127.0.0.1:3100").unwrap())?;
-
-    // We need to register our layer with `tracing`.
-    tracing_subscriber::registry()
-        .with(layer)
-        // One could add more layers here, for example logging to stdout:
-        // .with(tracing_subscriber::fmt::Layer::new())
-        .init();
-    tokio::spawn(task);
+    tokio::spawn(o11y::build()?);
 
     let pool = get_db_pool().await?;
 

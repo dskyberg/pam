@@ -1,25 +1,44 @@
 services:
   loki:
-    image: grafana/loki
     container_name: loki
+    image: grafana/loki:2.9.2
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - loki
 
   promtail:
-    image: grafana/promtail
     container_name: promtail
+    image: grafana/promtail:2.9.2
     volumes:
       - /var/log:/var/log
     command: -config.file=/etc/promtail/config.yml
+    networks:
+      - loki
+    healthcheck:
+      test: wget --quiet --tries=1 --output-document=- http://localhost:3100/ready | grep -q -w ready || exit 1
+      start_period: 20s
+      interval: 10s
+      timeout: 1s
+      retries: 12
 
   grafana:
-    image: grafana/grafana:latest
     container_name: grafana
+    restart: unless-stopped
+    image: grafana/grafana:latest
     environment:
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    ports:
+      - "3000:3000"
+    networks:
+      - loki
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    depends_on:
+      - loki
     entrypoint:
       - sh
       - -euc
@@ -39,5 +58,9 @@ services:
           editable: false
         EOF
         /run.sh
-    ports:
-      - "3000:3000"
+
+volumes:
+  grafana-storage:
+
+networks:
+  loki:

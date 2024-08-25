@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { useQuery, gql } from '@apollo/client';
+import { useQuery } from '@apollo/client';
+import { GET_CELLS } from "../graph";
+
 import { styled } from '@mui/material/styles';
 import Paper from '@mui/material/Paper';
 import Table from '@mui/material/Table';
@@ -11,7 +13,9 @@ import TableRow from '@mui/material/TableRow';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 
+
 import { actor as cellActor } from '../state/cells';
+import { Typography } from "@mui/material";
 
 const columns = [
 
@@ -65,21 +69,10 @@ const CellSkeleton = () => (
 )
 
 
-const GET_MATRIX = gql`query Cells($pageSize: Int, $page: Int) {
-    cells(pageSize: $pageSize, page: $page) {
-        id
-        name
-        csp
-        country
-        region
-        cspRegion
-  }
-}`;
-
 
 export default function Cells() {
 
-    const { loading, error, data } = useQuery(GET_MATRIX, { variables: { pageSize: 25, page: 1 } });
+    const { loading, error, data } = useQuery(GET_CELLS);
 
 
     if (loading) return <p>Loading...</p>;
@@ -87,7 +80,8 @@ export default function Cells() {
 
 
     return (
-        <Paper sx={{ width: '100%', overflow: 'hidden', marginTop: '1em' }}>
+        <Paper sx={{ width: '100%', overflow: 'hidden', margin: '1em' }}>
+            <Typography variant="h6">Cells</Typography>
             <TableContainer sx={{ maxHeight: 440 }}>
                 <Table stickyHeader aria-label="sticky table">
                     <TableHead>

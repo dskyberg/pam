@@ -1,8 +1,9 @@
 {
   "name": "vite_client",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
+  "displayName": "Product Availability Matrix",
   "scripts": {
     "start": "vite",
     "build": "vite build",

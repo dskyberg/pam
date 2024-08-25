@@ -12,9 +12,12 @@ const Headline = styled(WarningAmberIcon)(({ theme }) => ({
     fontWeight: 900,
 }));
 
-const MyBox = styled(Box)({
-    textAlign: "center"
-})
+const MyBox = styled(Box)(({ theme }) => ({
+    display: "flex",
+    textAlign: "center",
+    alignItems: "center",
+    padding: theme.spacing(1),
+}));
 
 export default function NoMatch() {
     return (

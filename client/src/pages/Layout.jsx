@@ -5,9 +5,9 @@ import Toolbar from "@mui/material/Toolbar";
 
 export default function Layout() {
     return (
-        <Container >
+        <div sx={{ width: "100%", height: "100%", margin: 0, padding: 0 }}>
             <Toolbar />
-            <Outlet />
-        </Container>
+            <Outlet sx={{ width: "100%", padding: 0, margin: 0 }} />
+        </div>
     )
 }

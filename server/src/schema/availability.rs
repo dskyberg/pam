@@ -137,26 +137,6 @@ impl Availability {
         )
     }
 
-    pub async fn fetch_by_item_id_jurisdiction(
-        id: &str,
-        jurisdiction_name: &str,
-        pool: &Pool,
-    ) -> Result<Option<Jurisdiction>> {
-        let jurisdiction = Jurisdiction::fetch_one(None, Some(jurisdiction_name.to_owned()), pool)
-            .await
-            .map_err(|_| anyhow::anyhow!("Jurisdiction {} does not exist", jurisdiction_name))?;
-
-        Ok(sqlx::query_as(
-            r#"SELECT * from Availability
-            LEFT JOIN Jurisdiction ON Jurisdiction.id = Availability.jurisdiction_id
-            WHERE Availability.item_id = $1 and Jurisdiction.name = $2;"#,
-        )
-        .bind(id)
-        .bind(&jurisdiction.id)
-        .fetch_optional(pool)
-        .await?)
-    }
-
     pub async fn create(
         item_id: &str,
         jurisdiction_id: &str,
@@ -214,26 +194,30 @@ impl Availability {
         compliance: Option<String>,
         pool: &Pool,
     ) -> Result<Availability> {
+        println!(
+            "Update Availability: {}, {:?}, {:?}",
+            &id, &lifecycle, &compliance
+        );
         let mut separator = "";
         let mut sql = String::from("UPDATE availability SET ");
 
         if let Some(lifecycle_name) = lifecycle {
             let lifecycle = Lifecycle::fetch_one(None, Some(lifecycle_name), pool).await?;
-            sql = format!("{}{}lifecycle_id = {}", sql, &separator, &lifecycle.id);
+            sql = format!("{}{}lifecycle_id = '{}'", sql, &separator, &lifecycle.id);
             separator = ", ";
         }
 
         if let Some(compliance_name) = compliance {
             let compliance = Compliance::fetch_one(None, Some(compliance_name), pool).await?;
-            sql = format!("{}{}compliance_id = {}", sql, &separator, compliance.id);
+            sql = format!("{}{}compliance_id = '{}'", sql, &separator, compliance.id);
             separator = ", ";
         }
 
         sql = format!(
-            "{}{}last_updated = CURRENT_TIMESTAMP WHERE availability.id = {} RETURNING *",
+            "{}{}last_updated = CURRENT_TIMESTAMP WHERE availability.id = '{}' RETURNING *",
             sql, &separator, id
         );
-
+        println!("Final update sql: {}", &sql);
         let result = sqlx::query_as(&sql).fetch_one(pool).await?;
 
         tracing::info!(

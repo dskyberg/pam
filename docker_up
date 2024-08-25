@@ -1,0 +1,7 @@
+#!/usr/bin/env zsh
+O11Y_COMPOSE=o11y/docker-compose.yml
+LOCAL_COMPOSE=docker-compose.yml
+
+echo "Checking for O11Y"
+docker compose -f $O11Y_COMPOSE up -d
+docker compose -f $LOCAL_COMPOSE up -d

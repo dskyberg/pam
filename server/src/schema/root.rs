@@ -2,8 +2,9 @@ use anyhow::Result;
 use juniper::{graphql_object, EmptySubscription, RootNode};
 
 use super::{
-    Availability, AvailabilityInput, Category, Cell, CellInput, Compliance, Feature, FeatureInput,
-    Jurisdiction, JurisdictionInput, Lifecycle, Matrix, Product, ProductInput,
+    Availability, AvailabilityInput, AvailabilityUpdateInput, Category, Cell, CellInput, Comment,
+    CommentInput, Compliance, Feature, FeatureInput, Jurisdiction, JurisdictionInput, Lifecycle,
+    Matrix, Product, ProductInput,
 };
 use crate::database::Pool;
 
@@ -161,32 +162,47 @@ impl QueryRoot {
     async fn availability(id: String, context: &Context) -> Result<Availability> {
         Availability::fetch_by_id(&id, &context.db_pool).await
     }
+
+    #[graphql(description = "Get comments for and availability")]
+    async fn comments(item_id: String, context: &Context) -> Result<Vec<Comment>> {
+        Comment::fetch_by_item_id(&item_id, &context.db_pool).await
+    }
 }
 
 pub struct MutationRoot;
 
 #[graphql_object(Context = Context)]
 impl MutationRoot {
+    #[graphql(description = "Add a new Category")]
     async fn create_category(context: &Context, name: String) -> Result<Category> {
         Category::create(&name, &context.db_pool).await
     }
 
+    #[graphql(description = "Add a new Product from ProductInput")]
     async fn create_product(context: &Context, input: ProductInput) -> Result<Product> {
         Product::create_from_input(&input, &context.db_pool).await
     }
 
+    #[graphql(description = "Add a new FGeature from FeatureInput")]
     async fn create_feature(context: &Context, input: FeatureInput) -> Result<Feature> {
         Feature::create_from_input(&input, &context.db_pool).await
     }
 
-    async fn create_lifecycle(context: &Context, name: String) -> Result<Lifecycle> {
-        Lifecycle::create(&name, &context.db_pool).await
+    #[graphql(description = "Add a new Lifecycle")]
+    async fn create_lifecycle(
+        context: &Context,
+        name: String,
+        description: String,
+    ) -> Result<Lifecycle> {
+        Lifecycle::create(&name, &description, &context.db_pool).await
     }
 
+    #[graphql(description = "Add a new Compliance")]
     async fn create_compliance(context: &Context, name: String) -> Result<Compliance> {
         Compliance::create(&name, &context.db_pool).await
     }
 
+    #[graphql(description = "Add a new Justification")]
     async fn create_jurisdiction(
         context: &Context,
         input: JurisdictionInput,
@@ -194,14 +210,36 @@ impl MutationRoot {
         Jurisdiction::create_from_input(&input, &context.db_pool).await
     }
 
+    #[graphql(description = "Add a new Cell")]
     async fn create_cell(context: &Context, input: CellInput) -> Result<Cell> {
         Cell::create_from_input(&input, &context.db_pool).await
     }
+
+    #[graphql(description = "Add an Availability from AvailibilityInput")]
     async fn create_availability(
         context: &Context,
         input: AvailabilityInput,
     ) -> Result<Availability> {
         Availability::create_from_input(&input, &context.db_pool).await
+    }
+
+    #[graphql(description = "Update an Availability from AvailabilityUpdateInput")]
+    async fn update_availability(
+        context: &Context,
+        input: AvailabilityUpdateInput,
+    ) -> Result<Availability> {
+        Availability::update_from_input(input, &context.db_pool).await
+    }
+
+    #[graphql(description = "Add a Comment from CommentInput")]
+    async fn create_comment(context: &Context, input: CommentInput) -> Result<Comment> {
+        Comment::create(
+            &input.item_id,
+            &input.text,
+            input.created_by.as_deref(),
+            &context.db_pool,
+        )
+        .await
     }
 }
 

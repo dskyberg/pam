@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::{self, NaiveDateTime};
 use juniper::graphql_object;
+use juniper::GraphQLInputObject;
 use sqlx::FromRow;
 
 use crate::database::Pool;
@@ -46,7 +47,7 @@ impl Comment {
 impl Comment {
     pub async fn fetch_by_item_id(item_id: &str, pool: &Pool) -> Result<Vec<Comment>> {
         Ok(sqlx::query_as(
-            "SELECT * FROM comment WHERE comment.item_id=$1 ORDER BY comment.created",
+            "SELECT * FROM comment WHERE comment.item_id=$1 ORDER BY comment.created DESC",
         )
         .bind(item_id)
         .fetch_all(pool)
@@ -74,4 +75,12 @@ impl Comment {
 
         Ok(result)
     }
+}
+
+#[derive(GraphQLInputObject)]
+#[graphql(description = "Comment Input")]
+pub struct CommentInput {
+    pub item_id: String,
+    pub text: String,
+    pub created_by: Option<String>,
 }

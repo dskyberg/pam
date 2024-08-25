@@ -6,7 +6,15 @@ const CATEGORIES = [
       {
         name: "Universal Directory",
         availability: [
-          { jurisdiction: "aws_nac", lifecycle: "GA", compliance: "Available" },
+          {
+            jurisdiction: "aws_nac",
+            lifecycle: "GA",
+            compliance: "Available",
+            comments: [
+              { text: "This is the first comment", created_by: "david.skyberg@okta.com" },
+              { text: "This is the second comment", created_by: "david.skyberg@okta.com" },
+            ],
+          },
           { jurisdiction: "aws_frm", lifecycle: "GA", compliance: "Available" },
           { jurisdiction: "aws_frh", lifecycle: "GA", compliance: "Available" },
           { jurisdiction: "aws_il4", lifecycle: "GA", compliance: "Available" },
@@ -668,7 +676,16 @@ export async function add() {
               let itemId = feature_data.createFeature.id;
               for (let availability of feature.availability) {
                 const input = { itemId, ...availability };
-                await query(availability_query, "AddAvailability", { input });
+                let availability_data = await query(availability_query, "AddAvailability", { input });
+                if (availability.hasOwnProperty("comments")) {
+                  for (let comment of availability.comments) {
+                    await query(comment_query, "AddComment", {
+                      input: {
+                        item_id: availability_data.createAvailability.id,
+                      },
+                    });
+                  }
+                }
               }
             }
           }

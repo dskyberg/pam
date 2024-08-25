@@ -1,9 +1,12 @@
 import { useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import { useSelector } from "@xstate/react";
+import { Box } from '@mui/material';
+
+
 import MenuAppBar from './components/MenuAppBar';
 import ClippedDrawer from './components/ClippedDrawer';
-import { Box } from '@mui/material';
+import Panel from "./components/Panel";
 
 import Layout from './pages/Layout';
 import Home from './pages/Home';
@@ -18,7 +21,7 @@ import NoMatch from './pages/NoMatch';
 function App() {
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', width: '100%', height: "100%" }}>
       <MenuAppBar />
       <ClippedDrawer />
       <Routes>
@@ -31,6 +34,7 @@ function App() {
           <Route path="*" element={<NoMatch />} />
         </Route>
       </Routes>
+      <Panel />
     </Box>
   );
 }
