@@ -4,3 +4,7 @@ export { GET_COMMENTS } from "./getComments";
 export { CREATE_COMMENT } from "./createComment";
 export { GET_CELLS } from "./getCells"
 export { UPDATE_AVAILABILITY } from './updateAvailability'
+export { GET_AVAILABILITY } from './getAvailability'
+export { GET_AVAILABILITY_FOR } from './getAvailabilityFor'
+export { GET_PRODUCT } from './getProduct'
+export { GET_FEATURE } from './getFeature'

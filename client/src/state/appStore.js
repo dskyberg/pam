@@ -24,9 +24,10 @@ export const storeLogic = fromStore(
         },
         setActiveItem: {
             activeItem: (context, event) => {
-                console.log("setActiveItem:", event)
-                return event.item
-            },
+                // Clear out if already selected.
+                if (context.activeItem?.id == event.item?.id) { return null }
+                return event.item;
+            }
         }
     }
 );

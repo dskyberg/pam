@@ -6,7 +6,7 @@ import { Box } from '@mui/material';
 
 import MenuAppBar from './components/MenuAppBar';
 import ClippedDrawer from './components/ClippedDrawer';
-import Panel from "./components/Panel";
+import PanelDrawer from "./components/PanelDrawer";
 
 import Layout from './pages/Layout';
 import Home from './pages/Home';
@@ -34,7 +34,7 @@ function App() {
           <Route path="*" element={<NoMatch />} />
         </Route>
       </Routes>
-      <Panel />
+      <PanelDrawer />
     </Box>
   );
 }

@@ -62,7 +62,7 @@ export default function Comments({ itemId }) {
             }
         }).then(() => {
             setNewComment('');
-        })
+        }).catch(err => console.log("Comment save error:", err.message))
 
     }
     const handleCancelComment = () => {
@@ -70,7 +70,7 @@ export default function Comments({ itemId }) {
     }
 
     return (
-        <Stack>
+        <Stack sx={{ marginTop: "1em" }}>
             <Typography variant="h6">Comments</Typography>
             <List sx={{ bgcolor: 'background.paper' }}>
                 {data.comments.map(comment => (

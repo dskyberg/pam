@@ -137,6 +137,20 @@ impl Availability {
         )
     }
 
+    pub async fn fetch_by_item_jurisdiction(
+        item_id: &str,
+        jurisdiction_id: &str,
+        pool: &Pool,
+    ) -> Result<Option<Availability>> {
+        Ok(
+            sqlx::query_as("SELECT * FROM availability WHERE availability.item_id = $1 AND availability.jurisdiction_id = $2" )
+                .bind(item_id)
+                .bind(jurisdiction_id)
+                .fetch_optional(pool)
+                .await?,
+        )
+    }
+
     pub async fn create(
         item_id: &str,
         jurisdiction_id: &str,

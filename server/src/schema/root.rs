@@ -163,6 +163,14 @@ impl QueryRoot {
         Availability::fetch_by_id(&id, &context.db_pool).await
     }
 
+    #[graphql(description = "Get a single availability by item and jurisdiction")]
+    async fn availability_for(
+        item_id: String,
+        jurisdiction_id: String,
+        context: &Context,
+    ) -> Result<Option<Availability>> {
+        Availability::fetch_by_item_jurisdiction(&item_id, &jurisdiction_id, &context.db_pool).await
+    }
     #[graphql(description = "Get comments for and availability")]
     async fn comments(item_id: String, context: &Context) -> Result<Vec<Comment>> {
         Comment::fetch_by_item_id(&item_id, &context.db_pool).await
