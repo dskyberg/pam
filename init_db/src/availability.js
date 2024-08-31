@@ -5,14 +5,15 @@ const CATEGORIES = [
     products: [
       {
         name: "Universal Directory",
+        comments: [{ text: "This is a product comment!", createdBy: "davaid.skyberg@okta.com" }],
         availability: [
           {
             jurisdiction: "aws_nac",
             lifecycle: "GA",
             compliance: "Available",
             comments: [
-              { text: "This is the first comment", created_by: "david.skyberg@okta.com" },
-              { text: "This is the second comment", created_by: "david.skyberg@okta.com" },
+              { text: "This is the first comment", createdBy: "david.skyberg@okta.com" },
+              { text: "This is the second comment", createdBy: "david.skyberg@okta.com" },
             ],
           },
           { jurisdiction: "aws_frm", lifecycle: "GA", compliance: "Available" },
@@ -646,6 +647,17 @@ const availability_query = `mutation AddAvailability($input: AvailabilityInput!)
   }
 }`;
 
+const comment_query = `mutation AddComment($input: CommentInput!) {
+  createComment(input: $input) {
+    id
+    itemId
+    text,
+    created
+    createdBy
+  }
+}
+  `;
+
 export async function add() {
   for (let category of CATEGORIES) {
     await query(category_query, "AddCategory", { name: category.name });
@@ -657,11 +669,26 @@ export async function add() {
             category: category.name,
           },
         });
+        if (product.hasOwnProperty("comments")) {
+          for (let comment of product.comments) {
+            let itemId = product_data.createProduct.id;
+            let input = { itemId, ...comment };
+            await query(comment_query, "AddComment", { input });
+          }
+        }
         if (product.hasOwnProperty("availability")) {
           let itemId = product_data.createProduct.id;
           for (let availability of product.availability) {
-            const input = { itemId, ...availability };
-            await query(availability_query, "AddAvailability", { input });
+            const { comments, ...rest } = availability;
+            const input = { itemId, ...rest };
+            let availability_data = await query(availability_query, "AddAvailability", { input });
+            if (comments != undefined) {
+              for (let comment of comments) {
+                let itemId = availability_data.createAvailability.id;
+                let input = { itemId, ...comment };
+                await query(comment_query, "AddComment", { input });
+              }
+            }
           }
         }
         if (product.hasOwnProperty("features")) {
@@ -672,18 +699,24 @@ export async function add() {
                 product: product.name,
               },
             });
+            if (feature.hasOwnProperty("comments")) {
+              for (let comment of feature.comments) {
+                let itemId = feature_data.createFeature.id;
+                let input = { itemId, ...comment };
+                await query(comment_query, "AddComment", { input });
+              }
+            }
             if (feature.hasOwnProperty("availability")) {
               let itemId = feature_data.createFeature.id;
               for (let availability of feature.availability) {
-                const input = { itemId, ...availability };
+                const { comments, ...rest } = availability;
+                const input = { itemId, ...rest };
                 let availability_data = await query(availability_query, "AddAvailability", { input });
-                if (availability.hasOwnProperty("comments")) {
-                  for (let comment of availability.comments) {
-                    await query(comment_query, "AddComment", {
-                      input: {
-                        item_id: availability_data.createAvailability.id,
-                      },
-                    });
+                if (comments != undefined) {
+                  for (let comment of comments) {
+                    let itemId = availability_data.createAvailability.id;
+                    let input = { itemId, ...comment };
+                    await query(comment_query, "AddComment", { input });
                   }
                 }
               }
