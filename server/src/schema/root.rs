@@ -241,6 +241,7 @@ impl MutationRoot {
 
     #[graphql(description = "Add a Comment from CommentInput")]
     async fn create_comment(context: &Context, input: CommentInput) -> Result<Comment> {
+        println!("createComment: {:?}", &input);
         Comment::create(
             &input.item_id,
             &input.text,

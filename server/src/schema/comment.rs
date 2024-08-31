@@ -77,7 +77,7 @@ impl Comment {
     }
 }
 
-#[derive(GraphQLInputObject)]
+#[derive(Debug, GraphQLInputObject)]
 #[graphql(description = "Comment Input")]
 pub struct CommentInput {
     pub item_id: String,
